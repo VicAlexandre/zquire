@@ -48,6 +48,7 @@ def test_status_reports_the_workspace(tmp_path):
         "topology_evidence": ["application holds 1 Zephyr application(s), e.g. application"],
         "application_candidates": ["application"],
         "default_application": "application",
+        "active_profile": None,
     }
 
 

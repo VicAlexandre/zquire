@@ -3,6 +3,7 @@ from pathlib import Path
 
 from zquire import __version__
 from zquire.core.context import Context
+from zquire.core.profiles import active_profile
 from zquire.core.sdk import sdk_version
 from zquire.core.topology import infer
 from zquire.core.workspace import Workspace
@@ -33,6 +34,7 @@ def _describe(workspace: Workspace) -> dict:
         "topology_evidence": topology.evidence,
         "application_candidates": candidates,
         "default_application": candidates[0] if len(candidates) == 1 else None,
+        "active_profile": active_profile(workspace),
     }
 
 

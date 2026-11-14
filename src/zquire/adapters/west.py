@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from west.configuration import Configuration
+from west.configuration import ConfigFile, Configuration
 from west.manifest import ImportFlag, Manifest
 from west.util import WestNotFound, west_topdir
 
@@ -34,3 +34,20 @@ def read_manifest(topdir: Path) -> ManifestInfo:
         return ManifestInfo(path, repository, None, str(error))
     projects = {project.name: Path(project.abspath) for project in manifest.projects[1:]}
     return ManifestInfo(path, repository, projects, None)
+
+
+_CONFIG_LEVELS = (
+    ("local", ConfigFile.LOCAL),
+    ("global", ConfigFile.GLOBAL),
+    ("system", ConfigFile.SYSTEM),
+)
+
+
+def config_value(topdir: Path, option: str) -> tuple[str, str] | None:
+    """Return the effective value of a west config option and the level that set it."""
+    config = Configuration(topdir)
+    for level, config_file in _CONFIG_LEVELS:
+        value = config.get(option, configfile=config_file)
+        if value:
+            return value, level
+    return None
