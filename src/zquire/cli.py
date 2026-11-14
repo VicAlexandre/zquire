@@ -1,7 +1,10 @@
 import argparse
 import json
 from collections.abc import Callable
+from pathlib import Path
 
+from zquire.core.context import Context
+from zquire.core.workspace import locate
 from zquire.errors import ZquireError
 from zquire.mcp_server import serve
 from zquire.tools import TOOLS, Tool, invoke
@@ -24,6 +27,11 @@ def _json_or_raw(value: str) -> object:
 
 
 def add_commands(parser: argparse.ArgumentParser, tools: dict[str, Tool] = TOOLS) -> None:
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        help="West workspace topdir (default: search upward from the current directory).",
+    )
     commands = parser.add_subparsers(dest=_COMMAND, required=True, metavar="COMMAND")
     commands.add_parser("serve", help="Run the MCP server over stdio.")
     for tool in tools.values():
@@ -39,8 +47,9 @@ def add_commands(parser: argparse.ArgumentParser, tools: dict[str, Tool] = TOOLS
 
 def run(args: argparse.Namespace, tools: dict[str, Tool] = TOOLS) -> int:
     command = getattr(args, _COMMAND)
+    context = Context(locate(Path.cwd(), args.workspace))
     if command == "serve":
-        serve()
+        serve(context)
         return 0
     tool = tools[command]
     arguments = {
@@ -49,7 +58,7 @@ def run(args: argparse.Namespace, tools: dict[str, Tool] = TOOLS) -> int:
         if hasattr(args, name)
     }
     try:
-        payload, exit_code = invoke(tool, arguments), 0
+        payload, exit_code = invoke(tool, arguments, context), 0
     except ZquireError as error:
         payload, exit_code = error.to_dict(), 1
     print(json.dumps(payload))

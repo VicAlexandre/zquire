@@ -15,16 +15,20 @@ _ZQUIRE = shutil.which("zquire", path=str(Path(sys.executable).parent))
 pytestmark = pytest.mark.skipif(_ZQUIRE is None, reason="zquire is not installed")
 
 
-def test_pip_entry_point_runs_status():
-    completed = subprocess.run([_ZQUIRE, "status"], capture_output=True, text=True, check=True)
-    assert json.loads(completed.stdout) == {"zquire_version": __version__}
+def test_pip_entry_point_runs_status(tmp_path):
+    completed = subprocess.run(
+        [_ZQUIRE, "status"], capture_output=True, text=True, check=True, cwd=tmp_path
+    )
+    assert json.loads(completed.stdout)["zquire_version"] == __version__
 
 
-def test_mcp_over_stdio():
+def test_mcp_over_stdio(tmp_path):
+    server = StdioServerParameters(command=_ZQUIRE, args=["serve"], cwd=tmp_path)
+
     async def session():
-        async with Client(StdioServerParameters(command=_ZQUIRE, args=["serve"])) as client:
+        async with Client(server) as client:
             return await client.list_tools(), await client.call_tool("status")
 
     listed, result = asyncio.run(session())
     assert {tool.name for tool in listed.tools} == TOOLS.keys()
-    assert result.structured_content == {"zquire_version": __version__}
+    assert result.structured_content["zquire_version"] == __version__

@@ -3,25 +3,26 @@ import asyncio
 import pytest
 from mcp import Client, MCPError
 
+from zquire.core.context import Context
 from zquire.errors import ZquireError
 from zquire.tools import Tool
 
 _OBJECT = {"type": "object"}
 
 
-def _echo(text, repeat_count=1):
+def _echo(context, text, repeat_count=1):
     return {"text": text * repeat_count}
 
 
-def _fail(hint=None):
+def _fail(context, hint=None):
     raise ZquireError("SOMETHING_FAILED", "it failed", hint)
 
 
-def _crash():
+def _crash(context):
     raise RuntimeError("boom")
 
 
-def _bad_output():
+def _bad_output(context):
     return {"unexpected": True}
 
 
@@ -44,6 +45,7 @@ FAKE_TOOLS = {
                 "additionalProperties": False,
             },
             handler=_echo,
+            needs_workspace=False,
         ),
         Tool(
             name="fail",
@@ -51,6 +53,7 @@ FAKE_TOOLS = {
             input_schema={"type": "object", "properties": {"hint": {"type": "string"}}},
             output_schema=_OBJECT,
             handler=_fail,
+            needs_workspace=False,
         ),
         Tool(
             name="crash",
@@ -58,6 +61,14 @@ FAKE_TOOLS = {
             input_schema=_OBJECT,
             output_schema=_OBJECT,
             handler=_crash,
+            needs_workspace=False,
+        ),
+        Tool(
+            name="workspace_root",
+            description="Needs a workspace.",
+            input_schema=_OBJECT,
+            output_schema=_OBJECT,
+            handler=lambda context: {"root": str(context.workspace.root)},
         ),
         Tool(
             name="bad_output",
@@ -65,9 +76,14 @@ FAKE_TOOLS = {
             input_schema=_OBJECT,
             output_schema={"type": "object", "additionalProperties": False},
             handler=_bad_output,
+            needs_workspace=False,
         ),
     ]
 }
+
+
+NO_WORKSPACE = Context(None)
+
 
 
 @pytest.fixture

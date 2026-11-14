@@ -20,7 +20,8 @@ def west_run(argv):
     return raised.value.code
 
 
-def test_west_zquire_status_prints_the_cli_json(capsys):
+def test_west_zquire_status_prints_the_cli_json(capsys, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     assert west_run(["status"]) == 0
     west_output = capsys.readouterr().out
     from zquire import cli

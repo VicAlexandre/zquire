@@ -1,13 +1,14 @@
 import jsonschema
 import pytest
 
+from tests.conftest import NO_WORKSPACE
 from zquire import __version__
 from zquire.errors import ZquireError
 from zquire.tools import TOOLS, invoke
 
 
 def test_status_reports_version():
-    assert invoke(TOOLS["status"], {}) == {"zquire_version": __version__}
+    assert invoke(TOOLS["status"], {}, NO_WORKSPACE)["zquire_version"] == __version__
 
 
 @pytest.mark.parametrize(
@@ -17,23 +18,25 @@ def test_status_reports_version():
 )
 def test_invalid_arguments_are_rejected_before_the_handler(fake_tools, arguments):
     with pytest.raises(ZquireError) as raised:
-        invoke(fake_tools["echo"], arguments)
+        invoke(fake_tools["echo"], arguments, NO_WORKSPACE)
     assert raised.value.code == "INVALID_ARGUMENT"
 
 
 def test_invalid_argument_message_names_the_offending_path(fake_tools):
     with pytest.raises(ZquireError) as raised:
-        invoke(fake_tools["echo"], {"text": "a", "repeat_count": "2"})
+        invoke(fake_tools["echo"], {"text": "a", "repeat_count": "2"}, NO_WORKSPACE)
     assert raised.value.message.startswith("$.repeat_count:")
 
 
 def test_valid_arguments_reach_the_handler(fake_tools):
-    assert invoke(fake_tools["echo"], {"text": "ab", "repeat_count": 2}) == {"text": "abab"}
+    assert invoke(fake_tools["echo"], {"text": "ab", "repeat_count": 2}, NO_WORKSPACE) == {
+        "text": "abab"
+    }
 
 
 def test_result_violating_output_schema_is_a_fault(fake_tools):
     with pytest.raises(jsonschema.ValidationError):
-        invoke(fake_tools["bad_output"], {})
+        invoke(fake_tools["bad_output"], {}, NO_WORKSPACE)
 
 
 @pytest.mark.parametrize(
