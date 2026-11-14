@@ -85,6 +85,10 @@ FAKE_TOOLS = {
 NO_WORKSPACE = Context(None)
 
 
+def pytest_bdd_apply_tag(tag, function):
+    pytest.mark.requirement(tag)(function)
+    return True
+
 
 @pytest.fixture
 def fake_tools():
