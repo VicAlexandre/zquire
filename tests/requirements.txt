@@ -1,0 +1,6 @@
+west
+pytest
+pytest-bdd
+pytest-cov
+mutmut
+ruff

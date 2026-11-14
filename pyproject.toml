@@ -1,0 +1,55 @@
+[project]
+name = "zquire"
+dynamic = ["version", "dependencies"]
+description = "MCP server and CLI that gives an AI agent an edit, build, flash, observe and test loop for Zephyr"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Embedded Systems",
+]
+
+[project.urls]
+Homepage = "https://github.com/VicAlexandre/zquire"
+Issues = "https://github.com/VicAlexandre/zquire/issues"
+
+[project.scripts]
+zquire = "zquire.cli:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "zquire.__version__" }
+dependencies = { file = ["scripts/requirements.txt"] }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+branch = true
+source = ["zquire"]
+
+[tool.mutmut]
+source_paths = ["src/zquire"]
+pytest_add_cli_args_test_selection = ["tests"]
+also_copy = ["scripts"]
+# Installed-package tests run the real zquire, not the mutants.
+pytest_add_cli_args = ["--ignore=tests/test_installed.py"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "SIM", "UP", "W"]
