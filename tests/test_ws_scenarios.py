@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,11 @@ from zquire.mcp_server import build_server
 
 @scenario("features/workspace.feature", "Report workspace status")
 def test_report_workspace_status():
+    pass
+
+
+@scenario("features/workspace.feature", "No workspace found")
+def test_no_workspace_found():
     pass
 
 
@@ -44,6 +50,12 @@ def test_topdir_git_repository():
 @pytest.fixture
 def root(tmp_path):
     return tmp_path / "ws"
+
+
+@given("zquire is started in a directory with no west workspace above it")
+def no_workspace(root):
+    root.mkdir()
+    assert locate(root) is None
 
 
 @given("zquire is started inside a west workspace using Zephyr 4.4")
@@ -91,8 +103,19 @@ def t2_with_git(root, name):
 @when(parsers.parse('the agent calls "{tool}"'), target_fixture="result")
 def agent_calls(root, tool):
     result = call_mcp(build_server(Context(locate(root))), tool)
-    assert not result.is_error
+    if result.is_error:
+        return {"error": json.loads(result.content[0].text)}
     return result.structured_content
+
+
+@then(parsers.parse('the call fails with error "{code}"'))
+def fails_with(result, code):
+    assert result["error"]["code"] == code
+
+
+@then(parsers.parse('the error hint mentions "{text}"'))
+def hint_mentions(result, text):
+    assert text in result["error"]["hint"]
 
 
 @then("the result contains the workspace root")

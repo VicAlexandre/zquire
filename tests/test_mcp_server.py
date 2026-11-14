@@ -22,10 +22,10 @@ def test_every_registered_tool_is_listed_with_its_schemas():
 
 
 @pytest.mark.parametrize("name", TOOLS)
-def test_registered_tools_without_required_arguments_succeed(name, tmp_path):
+def test_registered_tools_without_required_arguments_succeed(name, ready_workspace):
     if TOOLS[name].input_schema.get("required"):
         pytest.skip("needs arguments")
-    result = call_mcp(build_server(Context(locate(t2(tmp_path)))), name)
+    result = call_mcp(build_server(Context(locate(ready_workspace))), name)
     assert not result.is_error
     jsonschema.validate(result.structured_content, TOOLS[name].output_schema)
 

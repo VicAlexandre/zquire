@@ -3,9 +3,11 @@ import asyncio
 import pytest
 from mcp import Client, MCPError
 
+from tests.workspaces import fake_west_build, t2
 from zquire.core.context import Context
+from zquire.core.workspace import locate
 from zquire.errors import ZquireError
-from zquire.tools import Tool
+from zquire.tools import TOOLS, Tool, invoke
 
 _OBJECT = {"type": "object"}
 
@@ -94,6 +96,15 @@ def isolated_west_config(tmp_path, monkeypatch):
 def pytest_bdd_apply_tag(tag, function):
     pytest.mark.requirement(tag)(function)
     return True
+
+
+@pytest.fixture
+def ready_workspace(tmp_path):
+    """A T2 workspace with an active profile that the fake `west build` can build."""
+    root = fake_west_build(t2(tmp_path / "ws"))
+    context = Context(locate(root))
+    invoke(TOOLS["build"], {"application": "application", "board": "b"}, context)
+    return root
 
 
 @pytest.fixture
