@@ -85,8 +85,37 @@ def test_create_fills_defaults(root):
 def test_storage_layout_and_no_partial_file(root):
     call(root, "profile_create", name="bench-1", application="app", board=BOARD)
     call(root, "profile_activate", name="bench-1")
-    assert sorted(p.name for p in (root / ".zquire").iterdir()) == ["profiles.toml", "state.toml"]
+    assert sorted(p.name for p in (root / ".zquire").iterdir()) == [
+        ".gitignore",
+        "profiles.toml",
+        "state.toml",
+    ]
     assert read_toml(root / ".zquire" / "state.toml") == {"active_profile": "bench-1"}
+
+
+def test_zquire_directory_ignores_itself_in_git(root):
+    call(root, "profile_create", name="bench-1", application="app", board=BOARD)
+    assert (root / ".zquire" / ".gitignore").read_text() == "*\n"
+
+
+def test_an_existing_gitignore_is_left_alone(root):
+    (root / ".zquire").mkdir()
+    (root / ".zquire" / ".gitignore").write_text("profiles.toml\n")
+    call(root, "profile_create", name="bench-1", application="app", board=BOARD)
+    assert (root / ".zquire" / ".gitignore").read_text() == "profiles.toml\n"
+
+
+def test_reading_does_not_create_the_zquire_directory(root):
+    call(root, "status")
+    call(root, "profile_list")
+    assert not (root / ".zquire").exists()
+
+
+def test_activate_alone_also_ignores_the_directory(root):
+    call(root, "profile_create", name="bench-1", application="app", board=BOARD)
+    (root / ".zquire" / ".gitignore").unlink()
+    call(root, "profile_activate", name="bench-1")
+    assert (root / ".zquire" / ".gitignore").is_file()
 
 
 def test_create_from_copies_settings_but_not_the_build_dir(root):
