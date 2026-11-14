@@ -1,3 +1,7 @@
+import configparser
+import json
+import re
+import shutil
 from pathlib import Path
 
 APPLICATION = {"CMakeLists.txt": "find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})\n"}
@@ -66,3 +70,47 @@ def t3(root: Path, *projects: str) -> Path:
     for name in projects:
         files.update(under(name, APPLICATION))
     return make_workspace(root, "manifest-repo", files)
+
+
+FAKE_BUILD = Path(__file__).with_name("fake_west_build.py")
+LOGS = Path(__file__).with_name("logs")
+
+
+def fake_west_build(root: Path) -> Path:
+    """Give the workspace a `west build` that replays a log instead of building."""
+    config = configparser.ConfigParser()
+    config.read(root / ".west" / "config")
+    repository = root / config["manifest"]["path"]
+    scripts = repository / "zquire-fake-build"
+    scripts.mkdir()
+    shutil.copy(FAKE_BUILD, scripts / "fake_west_build.py")
+    (scripts / "west-commands.yml").write_text(
+        "west-commands:\n"
+        "  - file: zquire-fake-build/fake_west_build.py\n"
+        "    commands:\n"
+        "      - name: build\n"
+        "        class: Build\n"
+    )
+    with (repository / config["manifest"]["file"]).open("a") as manifest_file:
+        manifest_file.write("    west-commands: zquire-fake-build/west-commands.yml\n")
+    (root / "fake-build").mkdir()
+    build_output(root, "success")
+    return root
+
+
+def build_output(root: Path, log: str, exit_code: int | None = None) -> str:
+    """Make the next fake build print tests/logs/<log>.log and exit with exit_code.
+
+    The logs were recorded in a workspace at /ws, which becomes root.
+    """
+    output = re.sub(r"/ws\b", str(root), (LOGS / f"{log}.log").read_text())
+    (root / "fake-build" / "output.log").write_text(output)
+    if exit_code is None:
+        exit_code = 0 if log in ("success", "kconfig", "repeat") else 1
+    (root / "fake-build" / "exit_code").write_text(str(exit_code))
+    return output
+
+
+def build_calls(root: Path) -> list[dict]:
+    calls = root / "fake-build" / "calls.jsonl"
+    return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
