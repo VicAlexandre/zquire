@@ -125,3 +125,56 @@ def build(
     finished = datetime.now(timezone.utc).isoformat(timespec="seconds")
     _record(workspace, name, result, finished, dependencies)
     return result
+
+
+LOG_LINES = 100
+# About the 8,000-token result size NFR-03 sets as its default.
+LOG_CHARACTERS = 32_000
+
+
+def _within_budget(lines: list[str]) -> tuple[list[str], bool]:
+    kept, size = [], 0
+    for line in lines:
+        if size + len(line) + 1 > LOG_CHARACTERS:
+            if not kept:
+                kept.append(line[:LOG_CHARACTERS])
+            return kept, True
+        kept.append(line)
+        size += len(line) + 1
+    return kept, False
+
+
+def build_log(
+    context: Context,
+    profile: str | None = None,
+    start_line: int | None = None,
+    line_count: int = LOG_LINES,
+) -> dict:
+    workspace = context.workspace
+    name = profile if profile is not None else profiles.active_profile(workspace)
+    if name is None:
+        raise ZquireError(
+            "NO_PROFILE",
+            "No profile named and no active profile.",
+            "Pass profile, or activate one with profile_activate.",
+        )
+    profiles.get(profiles.load(workspace), name)
+    log = profiles.build_log(workspace, name)
+    if not log.is_file():
+        raise ZquireError(
+            "NO_BUILD_LOG",
+            f"Profile '{name}' has no build log.",
+            f"Call build with profile '{name}' first.",
+        )
+    lines = log.read_text(errors="replace").splitlines()
+    first = max(len(lines) - line_count + 1, 1) if start_line is None else start_line
+    kept, truncated = _within_budget(lines[first - 1 : first - 1 + line_count])
+    return {
+        "profile": name,
+        "log_path": workspace.relative(log),
+        "total_lines": len(lines),
+        "first_line": first,
+        "last_line": first + len(kept) - 1,
+        "text": "\n".join(kept),
+        "truncated": truncated,
+    }

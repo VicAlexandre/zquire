@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import jsonschema
 
 from zquire.core import profiles
-from zquire.core.build import build
+from zquire.core.build import LOG_LINES, build, build_log
 from zquire.core.context import Context
 from zquire.core.status import status
 from zquire.errors import ZquireError
@@ -328,6 +328,40 @@ TOOLS = {
                 }
             ),
             handler=build,
+        ),
+        Tool(
+            name="build_log",
+            description=(
+                "Read part of a profile's latest build log: its last line_count lines, or "
+                "line_count lines from start_line. Defaults to the active profile."
+            ),
+            input_schema=_input(
+                {
+                    "profile": {"type": "string"},
+                    "start_line": {"type": "integer", "minimum": 1, "description": "1-based."},
+                    "line_count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": f"Defaults to {LOG_LINES}.",
+                    },
+                },
+                [],
+            ),
+            output_schema=_output(
+                {
+                    "profile": {"type": "string"},
+                    "log_path": {"type": "string"},
+                    "total_lines": {"type": "integer"},
+                    "first_line": {"type": "integer"},
+                    "last_line": {"type": "integer"},
+                    "text": {"type": "string"},
+                    "truncated": {
+                        "type": "boolean",
+                        "description": "Whether lines were left out to keep the result small.",
+                    },
+                }
+            ),
+            handler=build_log,
         ),
     ]
 }
