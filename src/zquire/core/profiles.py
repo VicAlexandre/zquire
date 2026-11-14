@@ -4,6 +4,7 @@ from pathlib import Path
 
 from zquire.adapters.store import prepare_state_dir, read_toml, write_toml
 from zquire.adapters.west import config_value
+from zquire.core import staleness
 from zquire.core.context import Context
 from zquire.core.topology import infer
 from zquire.core.workspace import Workspace
@@ -215,17 +216,26 @@ def _last_build(record: dict | None) -> dict | None:
     return {key: record[key] for key in ("status", "time", "duration_s", "build_dir")}
 
 
+def _stale(workspace: Workspace, settings: dict, record: dict | None, excluded: set) -> bool | None:
+    if record is None or "last_success" not in record:
+        return None
+    return staleness.is_stale(workspace, settings, record["last_success"], excluded)
+
+
 def list_profiles(context: Context) -> dict:
     workspace = context.workspace
     state = read_state(workspace)
     builds = state.get("builds", {})
+    profiles = load(workspace)
+    excluded = staleness.build_dirs(workspace, profiles)
     return {
         "profiles": [
             {
                 **_view(name, settings),
                 "active": name == state.get("active_profile"),
                 "last_build": _last_build(builds.get(name)),
+                "stale": _stale(workspace, settings, builds.get(name), excluded),
             }
-            for name, settings in load(workspace).items()
+            for name, settings in profiles.items()
         ]
     }

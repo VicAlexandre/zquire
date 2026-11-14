@@ -1,3 +1,6 @@
+import os
+import time
+
 import pytest
 from pytest_bdd import given, parsers, scenario, then, when
 
@@ -12,6 +15,16 @@ FEATURE = "features/profiles.feature"
 
 @scenario(FEATURE, "Derive a debug profile from an existing one")
 def test_derive_a_debug_profile():
+    pass
+
+
+@scenario(FEATURE, "List profiles")
+def test_list_profiles():
+    pass
+
+
+@scenario(FEATURE, "Changed Kconfig fragment marks a build stale")
+def test_changed_kconfig_fragment_marks_a_build_stale():
     pass
 
 
@@ -99,6 +112,36 @@ def local_board(root, board):
         config.write(f"\n[build]\nboard = {board}\n")
 
 
+def modify(path):
+    path.write_text("changed\n")
+    # Later than any build start, however coarse the filesystem's clock.
+    later = time.time_ns() + 10**10
+    os.utime(path, ns=(later, later))
+
+
+@given(parsers.parse('profiles "{first}", "{second}" and "{third}" exist'))
+def three_profiles(root, first, second, third):
+    for name in (first, second, third):
+        call(root, "profile_create", name=name, application="app", board="b")
+        call(root, "build", profile=name)
+    call(root, "profile_activate", name=first)
+
+
+@given(parsers.parse('"{path}" changed after "{name}" was last built'))
+def changed_after_build(root, path, name):
+    assert profile(root, name)["last_build"]["status"] == "success"
+    (root / "app" / path).parent.mkdir(parents=True, exist_ok=True)
+    modify(root / "app" / path)
+
+
+@given(parsers.parse('profile "{name}" was built with extra conf file "{conf}"'))
+def built_with_conf(root, name, conf):
+    (root / "app" / conf).write_text("CONFIG_DEBUG=y\n")
+    call(root, "profile_create", name=name, application="app", board="b", conf_files=[conf])
+    call(root, "build", profile=name)
+    assert profile(root, name)["stale"] is False
+
+
 @given("no build profiles exist")
 def no_profiles(root):
     assert call(root, "profile_list")["profiles"] == []
@@ -163,6 +206,16 @@ def create_without_board(root, outcome, name, application):
     attempt(outcome, root, "profile_create", name=name, application=application)
 
 
+@when(parsers.parse('"{conf}" is modified'))
+def conf_modified(root, conf):
+    modify(root / "app" / conf)
+
+
+@when('the agent calls "profile_list"')
+def list_profiles(root, outcome):
+    attempt(outcome, root, "profile_list")
+
+
 @when("zquire is restarted")
 def restarted():
     """Each call locates the workspace afresh, which is what a restart does."""
@@ -211,6 +264,18 @@ def board_from_local_config(outcome):
     assert {"setting": "board", "source": "west config", "level": "local"} in outcome["result"][
         "defaults_applied"
     ]
+
+
+@then(parsers.parse("{count:d} profiles are returned and exactly one is active"))
+def count_and_one_active(outcome, count):
+    listed = outcome["result"]["profiles"]
+    assert len(listed) == count
+    assert sum(p["active"] for p in listed) == 1
+
+
+@then(parsers.parse('"{name}" is marked stale'))
+def marked_stale(root, name):
+    assert profile(root, name)["stale"] is True
 
 
 @then(parsers.parse('"west build" runs with build directory "{build_dir}"'))

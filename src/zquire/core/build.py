@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from zquire.adapters.store import prepare_state_dir
 from zquire.adapters.west import run_build
-from zquire.core import profiles
+from zquire.core import profiles, staleness
 from zquire.core.context import Context
 from zquire.core.diagnostics import diagnostics, memory_usage
 from zquire.core.workspace import Workspace
@@ -70,7 +70,9 @@ def west_arguments(workspace: Workspace, settings: dict, pristine: str) -> list[
     return arguments + ["--", *cmake] if cmake else arguments
 
 
-def _record(workspace: Workspace, name: str, result: dict, finished: str) -> None:
+def _record(
+    workspace: Workspace, name: str, result: dict, finished: str, dependencies: dict
+) -> None:
     state = profiles.read_state(workspace)
     builds = state.setdefault("builds", {})
     record = {
@@ -80,7 +82,7 @@ def _record(workspace: Workspace, name: str, result: dict, finished: str) -> Non
         "build_dir": result["build_dir"],
     }
     if result["status"] == "success":
-        record["last_success"] = {"time": finished}
+        record["last_success"] = dependencies
     elif "last_success" in builds.get(name, {}):
         record["last_success"] = builds[name]["last_success"]
     builds[name] = record
@@ -96,9 +98,13 @@ def build(
 ) -> dict:
     workspace = context.workspace
     name, created = _choose_profile(context, profile, application, board)
-    settings = profiles.load(workspace)[name]
+    existing = profiles.load(workspace)
+    settings = existing[name]
     prepare_state_dir(workspace.root)
     log = profiles.build_log(workspace, name)
+    dependencies = staleness.snapshot(
+        workspace, settings, time.time_ns(), staleness.build_dirs(workspace, existing)
+    )
     started = time.monotonic()
     exit_code = run_build(
         workspace.root, west_arguments(workspace, settings, pristine or settings["pristine"]), log
@@ -116,5 +122,6 @@ def build(
         "diagnostics": diagnostics(output, workspace.root, failed=not succeeded),
         "memory": memory_usage(output) if succeeded else [],
     }
-    _record(workspace, name, result, datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    finished = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _record(workspace, name, result, finished, dependencies)
     return result
