@@ -28,12 +28,25 @@ def _state_file(workspace: Workspace) -> Path:
     return workspace.root / ".zquire" / "state.toml"
 
 
+def build_log(workspace: Workspace, name: str) -> Path:
+    return workspace.root / ".zquire" / "logs" / f"{name}-build.log"
+
+
 def load(workspace: Workspace) -> dict[str, dict]:
     return read_toml(_profiles_file(workspace))
 
 
+def read_state(workspace: Workspace) -> dict:
+    return read_toml(_state_file(workspace))
+
+
+def write_state(workspace: Workspace, state: dict) -> None:
+    prepare_state_dir(workspace.root)
+    write_toml(_state_file(workspace), state)
+
+
 def active_profile(workspace: Workspace) -> str | None:
-    return read_toml(_state_file(workspace)).get("active_profile")
+    return read_state(workspace).get("active_profile")
 
 
 def _save(workspace: Workspace, profiles: dict[str, dict]) -> None:
@@ -42,13 +55,12 @@ def _save(workspace: Workspace, profiles: dict[str, dict]) -> None:
 
 
 def _set_active(workspace: Workspace, name: str) -> None:
-    state = read_toml(_state_file(workspace))
+    state = read_state(workspace)
     state["active_profile"] = name
-    prepare_state_dir(workspace.root)
-    write_toml(_state_file(workspace), state)
+    write_state(workspace, state)
 
 
-def _get(profiles: dict[str, dict], name: str) -> dict:
+def get(profiles: dict[str, dict], name: str) -> dict:
     if name not in profiles:
         raise ZquireError(
             "PROFILE_NOT_FOUND",
@@ -62,7 +74,7 @@ def _view(name: str, settings: dict) -> dict:
     return {"name": name, **settings}
 
 
-def _workspace_path(workspace: Workspace, path: str) -> Path:
+def workspace_path(workspace: Workspace, path: str) -> Path:
     return (workspace.root / path).resolve()
 
 
@@ -74,9 +86,9 @@ def _stored_path(workspace: Workspace, path: Path) -> str:
 
 
 def _check_build_dir_free(workspace: Workspace, profiles: dict, name: str, build_dir: str) -> None:
-    wanted = _workspace_path(workspace, build_dir)
+    wanted = workspace_path(workspace, build_dir)
     for other, settings in profiles.items():
-        if other != name and _workspace_path(workspace, settings["build_dir"]) == wanted:
+        if other != name and workspace_path(workspace, settings["build_dir"]) == wanted:
             raise ZquireError(
                 "BUILD_DIR_IN_USE",
                 f"Build directory '{build_dir}' is already used by profile '{other}'.",
@@ -110,7 +122,7 @@ def _default_board(workspace: Workspace) -> tuple[str, str]:
 def _normalised(workspace: Workspace, settings: dict) -> dict:
     for key in ("application", "build_dir"):
         if key in settings:
-            settings[key] = _stored_path(workspace, _workspace_path(workspace, settings[key]))
+            settings[key] = _stored_path(workspace, workspace_path(workspace, settings[key]))
     return settings
 
 
@@ -132,7 +144,7 @@ def create(context: Context, name: str, **changes) -> dict:
     source = changes.pop("from", None)
     settings = dict(_DEFAULTS)
     if source is not None:
-        settings.update({k: v for k, v in _get(profiles, source).items() if k != "build_dir"})
+        settings.update({k: v for k, v in get(profiles, source).items() if k != "build_dir"})
     settings.update(_normalised(workspace, changes))
     defaults_applied = []
     if "application" not in settings:
@@ -151,7 +163,7 @@ def create(context: Context, name: str, **changes) -> dict:
 def update(context: Context, name: str, **changes) -> dict:
     workspace = context.workspace
     profiles = load(workspace)
-    settings = {**_get(profiles, name), **_normalised(workspace, changes)}
+    settings = {**get(profiles, name), **_normalised(workspace, changes)}
     _check_build_dir_free(workspace, profiles, name, settings["build_dir"])
     profiles[name] = settings
     _save(workspace, profiles)
@@ -161,26 +173,30 @@ def update(context: Context, name: str, **changes) -> dict:
 def delete(context: Context, name: str, remove_build_dir: bool = False) -> dict:
     workspace = context.workspace
     profiles = load(workspace)
-    settings = _get(profiles, name)
+    settings = get(profiles, name)
     if active_profile(workspace) == name:
         raise ZquireError(
             "PROFILE_ACTIVE",
             f"'{name}' is the active profile.",
             "Activate another profile first.",
         )
-    build_dir = _workspace_path(workspace, settings["build_dir"])
+    build_dir = workspace_path(workspace, settings["build_dir"])
     removed = remove_build_dir and build_dir.is_dir()
     if removed:
         _check_removable(workspace, build_dir, settings)
     del profiles[name]
     _save(workspace, profiles)
+    state = read_state(workspace)
+    if state.get("builds", {}).pop(name, None) is not None:
+        write_state(workspace, state)
+    build_log(workspace, name).unlink(missing_ok=True)
     if removed:
         shutil.rmtree(build_dir)
     return {"deleted": name, "build_dir_removed": removed}
 
 
 def _check_removable(workspace: Workspace, build_dir: Path, settings: dict) -> None:
-    application = _workspace_path(workspace, settings["application"])
+    application = workspace_path(workspace, settings["application"])
     inside = workspace.root in build_dir.parents
     if not inside or build_dir == application or build_dir in application.parents:
         raise ZquireError(
@@ -192,17 +208,28 @@ def _check_removable(workspace: Workspace, build_dir: Path, settings: dict) -> N
 
 def activate(context: Context, name: str) -> dict:
     workspace = context.workspace
-    _get(load(workspace), name)
+    get(load(workspace), name)
     _set_active(workspace, name)
     return {"active_profile": name}
 
 
+def _last_build(record: dict | None) -> dict | None:
+    if record is None:
+        return None
+    return {key: record[key] for key in ("status", "time", "duration_s", "build_dir")}
+
+
 def list_profiles(context: Context) -> dict:
     workspace = context.workspace
-    active = active_profile(workspace)
+    state = read_state(workspace)
+    builds = state.get("builds", {})
     return {
         "profiles": [
-            {**_view(name, settings), "active": name == active}
+            {
+                **_view(name, settings),
+                "active": name == state.get("active_profile"),
+                "last_build": _last_build(builds.get(name)),
+            }
             for name, settings in load(workspace).items()
         ]
     }

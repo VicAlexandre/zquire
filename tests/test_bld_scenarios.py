@@ -1,7 +1,7 @@
 import pytest
 from pytest_bdd import given, parsers, scenario, then, when
 
-from tests.workspaces import t3
+from tests.workspaces import build_calls, fake_west_build, t3
 from zquire.core.context import Context
 from zquire.core.workspace import locate
 from zquire.errors import ZquireError
@@ -30,6 +30,21 @@ def test_delete_the_active_profile():
     pass
 
 
+@scenario(FEATURE, "Build a non-active profile")
+def test_build_a_non_active_profile():
+    pass
+
+
+@scenario(FEATURE, "First build creates a default profile")
+def test_first_build_creates_a_default_profile():
+    pass
+
+
+@scenario(FEATURE, "Nothing to build")
+def test_nothing_to_build():
+    pass
+
+
 @scenario(FEATURE, "Board taken from west config")
 def test_board_from_west_config():
     pass
@@ -42,7 +57,7 @@ def test_active_profile_persists():
 
 @pytest.fixture
 def root(tmp_path):
-    return t3(tmp_path / "ws", "app")
+    return fake_west_build(t3(tmp_path / "ws", "app"))
 
 
 @pytest.fixture
@@ -82,6 +97,27 @@ def active_profile(root, name):
 def local_board(root, board):
     with (root / ".west" / "config").open("a") as config:
         config.write(f"\n[build]\nboard = {board}\n")
+
+
+@given("no build profiles exist")
+def no_profiles(root):
+    assert call(root, "profile_list")["profiles"] == []
+
+
+@when(parsers.parse('the agent calls "build" for profile "{name}"'))
+def build_profile(root, outcome, name):
+    call(root, "profile_create", name=name, application="app", board="b")
+    attempt(outcome, root, "build", profile=name)
+
+
+@when(parsers.parse('the agent calls "build" with application "{application}" and board "{board}"'))
+def build_with_application_and_board(root, outcome, application, board):
+    attempt(outcome, root, "build", application=application, board=board)
+
+
+@when('the agent calls "build" with no arguments')
+def build_without_arguments(root, outcome):
+    attempt(outcome, root, "build")
 
 
 @when(
@@ -175,6 +211,22 @@ def board_from_local_config(outcome):
     assert {"setting": "board", "source": "west config", "level": "local"} in outcome["result"][
         "defaults_applied"
     ]
+
+
+@then(parsers.parse('"west build" runs with build directory "{build_dir}"'))
+def west_build_runs_with(root, build_dir):
+    assert build_calls(root)[-1]["build_dir"] == str(root / build_dir)
+
+
+@then(parsers.parse('the active profile is still "{name}"'))
+def active_profile_is_still(root, name):
+    assert call(root, "status")["workspace"]["active_profile"] == name
+
+
+@then(parsers.parse('profile "{name}" is created and active'))
+def created_and_active(root, outcome, name):
+    assert (outcome["result"]["profile"], outcome["result"]["profile_created"]) == (name, True)
+    assert profile(root, name)["active"]
 
 
 @then(parsers.parse('the active build profile is "{name}"'))

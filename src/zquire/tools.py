@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import jsonschema
 
 from zquire.core import profiles
+from zquire.core.build import build
 from zquire.core.context import Context
 from zquire.core.status import status
 from zquire.errors import ZquireError
@@ -95,8 +96,14 @@ _SETTINGS = {
     },
     "pristine": {"enum": ["auto", "always", "never"]},
     "cmake_args": _STRINGS,
-    "conf_files": {**_STRINGS, "description": "Extra Kconfig fragments (EXTRA_CONF_FILE)."},
-    "overlays": {**_STRINGS, "description": "Devicetree overlays (EXTRA_DTC_OVERLAY_FILE)."},
+    "conf_files": {
+        **_STRINGS,
+        "description": "Extra Kconfig fragments (EXTRA_CONF_FILE), relative to the application.",
+    },
+    "overlays": {
+        **_STRINGS,
+        "description": "Devicetree overlays (EXTRA_DTC_OVERLAY_FILE), relative to the application.",
+    },
     "snippets": _STRINGS,
     "shields": _STRINGS,
 }
@@ -108,6 +115,60 @@ _PROFILE = {
 }
 
 _NAME = {"name": {"type": "string"}}
+
+_LAST_BUILD = {
+    "type": ["object", "null"],
+    "properties": {
+        "status": {"enum": ["success", "failure"]},
+        "time": {"type": "string", "description": "When the build finished, ISO 8601 UTC."},
+        "duration_s": {"type": "number"},
+        "build_dir": {"type": "string"},
+    },
+    "required": ["status", "time", "duration_s", "build_dir"],
+}
+
+_DIAGNOSTIC = {
+    "type": "object",
+    "properties": {
+        "severity": {"enum": ["error", "warning"]},
+        "category": {
+            "enum": [
+                "compiler",
+                "linker",
+                "kconfig",
+                "devicetree",
+                "cmake",
+                "memory_overflow",
+                "toolchain",
+                "unknown",
+            ]
+        },
+        "message": {"type": "string"},
+        "file": {
+            "type": "string",
+            "description": "Relative to the workspace root when inside it, else absolute.",
+        },
+        "line": {"type": "integer"},
+        "column": {"type": "integer"},
+        "hint": {"type": "string"},
+        "count": {"type": "integer", "description": "How many times the diagnostic repeated."},
+        "region": {"type": "string"},
+        "overflow_bytes": {"type": "integer"},
+        "log_excerpt": {"type": "string", "description": "The last lines of the build output."},
+    },
+    "required": ["severity", "category", "message", "count"],
+}
+
+_MEMORY_REGION = {
+    "type": "object",
+    "properties": {
+        "region": {"type": "string"},
+        "used": {"type": "integer", "description": "Bytes."},
+        "total": {"type": "integer", "description": "Bytes."},
+        "percent": {"type": "number"},
+    },
+    "required": ["region", "used", "total", "percent"],
+}
 
 
 def _input(properties: dict, required: list[str]) -> dict:
@@ -139,7 +200,10 @@ TOOLS = {
         ),
         Tool(
             name="profile_list",
-            description="List the build profiles, their settings and which one is active.",
+            description=(
+                "List the build profiles, their settings, which one is active and how each "
+                "was last built."
+            ),
             input_schema=_input({}, []),
             output_schema=_output(
                 {
@@ -147,8 +211,12 @@ TOOLS = {
                         "type": "array",
                         "items": {
                             **_PROFILE,
-                            "properties": {**_PROFILE["properties"], "active": {"type": "boolean"}},
-                            "required": [*_PROFILE["required"], "active"],
+                            "properties": {
+                                **_PROFILE["properties"],
+                                "active": {"type": "boolean"},
+                                "last_build": _LAST_BUILD,
+                            },
+                            "required": [*_PROFILE["required"], "active", "last_build"],
                         },
                     }
                 }
@@ -214,6 +282,43 @@ TOOLS = {
             input_schema=_input(_NAME, ["name"]),
             output_schema=_output({"active_profile": {"type": "string"}}),
             handler=profiles.activate,
+        ),
+        Tool(
+            name="build",
+            description=(
+                "Run `west build` for the active profile, or the profile named. Returns status, "
+                "duration, classified diagnostics, flash and RAM usage per region and the path "
+                "of the full log. With no profile at all, application and board create and "
+                "activate the 'default' profile."
+            ),
+            input_schema=_input(
+                {
+                    "profile": {"type": "string", "description": "Profile to build instead."},
+                    "pristine": {
+                        **_SETTINGS["pristine"],
+                        "description": "Override the profile's pristine setting for this build.",
+                    },
+                    "application": _SETTINGS["application"],
+                    "board": _SETTINGS["board"],
+                },
+                [],
+            ),
+            output_schema=_output(
+                {
+                    "profile": {"type": "string"},
+                    "profile_created": {"type": "boolean"},
+                    "status": {"enum": ["success", "failure"]},
+                    "duration_s": {"type": "number"},
+                    "build_dir": {"type": "string"},
+                    "log_path": {
+                        "type": "string",
+                        "description": "Full build log, relative to the workspace root.",
+                    },
+                    "diagnostics": {"type": "array", "items": _DIAGNOSTIC},
+                    "memory": {"type": "array", "items": _MEMORY_REGION},
+                }
+            ),
+            handler=build,
         ),
     ]
 }

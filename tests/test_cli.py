@@ -68,10 +68,10 @@ def test_missing_required_option_is_invalid_argument(fake_tools, capsys):
 
 
 @pytest.mark.parametrize("name", TOOLS)
-def test_every_registered_tool_is_a_subcommand(name, capsys, tmp_path):
+def test_every_registered_tool_is_a_subcommand(name, capsys, ready_workspace):
     if TOOLS[name].input_schema.get("required"):
         pytest.skip("needs arguments")
-    assert cli.main(["--workspace", str(t2(tmp_path / "ws")), name]) == 0
+    assert cli.main(["--workspace", str(ready_workspace), name]) == 0
     capsys.readouterr()
 
 

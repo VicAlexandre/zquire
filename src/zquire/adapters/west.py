@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -51,3 +54,20 @@ def config_value(topdir: Path, option: str) -> tuple[str, str] | None:
         if value:
             return value, level
     return None
+
+
+def run_build(topdir: Path, arguments: list[str], log: Path) -> int:
+    """Run `west build` with output and errors interleaved into log, and return its exit code."""
+    log.parent.mkdir(exist_ok=True)
+    with log.open("w") as output:
+        return subprocess.run(
+            [sys.executable, "-m", "west", "build", *arguments],
+            cwd=topdir,
+            # Under `zquire serve` stdin carries the MCP stream, which the build must not read.
+            stdin=subprocess.DEVNULL,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+            # Unbuffered, so west's own messages stay in order with the tools it runs.
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            check=False,
+        ).returncode
