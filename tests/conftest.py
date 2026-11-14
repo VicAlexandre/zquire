@@ -1,0 +1,98 @@
+import asyncio
+
+import pytest
+from mcp import Client, MCPError
+
+from zquire.errors import ZquireError
+from zquire.tools import Tool
+
+_OBJECT = {"type": "object"}
+
+
+def _echo(text, repeat_count=1):
+    return {"text": text * repeat_count}
+
+
+def _fail(hint=None):
+    raise ZquireError("SOMETHING_FAILED", "it failed", hint)
+
+
+def _crash():
+    raise RuntimeError("boom")
+
+
+def _bad_output():
+    return {"unexpected": True}
+
+
+FAKE_TOOLS = {
+    tool.name: tool
+    for tool in [
+        Tool(
+            name="echo",
+            description="Repeat text.",
+            input_schema={
+                "type": "object",
+                "properties": {"text": {"type": "string"}, "repeat_count": {"type": "integer"}},
+                "required": ["text"],
+                "additionalProperties": False,
+            },
+            output_schema={
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+                "additionalProperties": False,
+            },
+            handler=_echo,
+        ),
+        Tool(
+            name="fail",
+            description="Always fail.",
+            input_schema={"type": "object", "properties": {"hint": {"type": "string"}}},
+            output_schema=_OBJECT,
+            handler=_fail,
+        ),
+        Tool(
+            name="crash",
+            description="Raise.",
+            input_schema=_OBJECT,
+            output_schema=_OBJECT,
+            handler=_crash,
+        ),
+        Tool(
+            name="bad_output",
+            description="Break the output schema.",
+            input_schema=_OBJECT,
+            output_schema={"type": "object", "additionalProperties": False},
+            handler=_bad_output,
+        ),
+    ]
+}
+
+
+@pytest.fixture
+def fake_tools():
+    return FAKE_TOOLS
+
+
+def call_mcp(server, name, arguments=None):
+    async def call():
+        async with Client(server) as client:
+            try:
+                return await client.call_tool(name, arguments)
+            except MCPError as error:
+                return error
+
+    # Raised outside the client so the error is not wrapped in its task group's ExceptionGroup.
+    outcome = asyncio.run(call())
+    if isinstance(outcome, MCPError):
+        raise outcome
+    return outcome
+
+
+def list_mcp(server):
+    async def list_tools():
+        async with Client(server) as client:
+            return await client.list_tools()
+
+    return asyncio.run(list_tools())
