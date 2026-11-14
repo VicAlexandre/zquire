@@ -1,0 +1,6 @@
+name: zquire
+
+package-managers:
+  pip:
+    requirement-files:
+      - scripts/requirements.txt

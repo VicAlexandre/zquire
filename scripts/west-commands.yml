@@ -1,0 +1,6 @@
+west-commands:
+  - file: scripts/west_commands/zquire_cmd.py
+    commands:
+      - name: zquire
+        class: ZquireCommand
+        help: MCP server and CLI for agent-driven Zephyr development
