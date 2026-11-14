@@ -1,0 +1,21 @@
+-- west build: making build dir /ws/app/build/default pristine
+-- west build: generating a build system
+Loading Zephyr default modules (Zephyr base).
+-- Application: /ws/app
+-- Board: qemu_cortex_m3, qualifiers: ti_lm3s6965
+-- Found toolchain: zephyr 1.0.0 (/opt/zephyr-sdk-1.0.0)
+Parsing /ws/zephyr/Kconfig
+Loaded configuration '/ws/zephyr/boards/qemu/cortex_m3/qemu_cortex_m3_defconfig'
+Merged configuration '/ws/app/prj.conf'
+Configuration saved to '/ws/app/build/default/zephyr/.config'
+Kconfig header saved to '/ws/app/build/default/zephyr/include/generated/zephyr/autoconf.h'
+-- west build: building application
+[1/134] Preparing syscall dependency handling
+
+[129/134] Linking C executable zephyr/zephyr_pre0.elf; Logical command for additional byproducts on target: zephyr_pre0
+FAILED: [code=1] zephyr/zephyr_pre0.elf zephyr/zephyr_pre0.map /ws/app/build/default/zephyr/zephyr_pre0.map 
+/opt/zephyr-sdk-1.0.0/gnu/arm-zephyr-eabi/bin/../lib/gcc/arm-zephyr-eabi/14.3.0/../../../../arm-zephyr-eabi/bin/ld.bfd: zephyr/zephyr_pre0.elf section `noinit' will not fit in region `RAM'
+/opt/zephyr-sdk-1.0.0/gnu/arm-zephyr-eabi/bin/../lib/gcc/arm-zephyr-eabi/14.3.0/../../../../arm-zephyr-eabi/bin/ld.bfd: region `RAM' overflowed by 2048 bytes
+collect2: error: ld returned 1 exit status
+ninja: build stopped: subcommand failed.
+FATAL ERROR: command exited with status 1: /usr/bin/cmake --build /ws/app/build/default

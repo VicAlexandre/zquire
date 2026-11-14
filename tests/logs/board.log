@@ -1,0 +1,15 @@
+-- west build: generating a build system
+Loading Zephyr default modules (Zephyr base).
+-- Application: /ws/app
+CMake Error at /ws/zephyr/cmake/modules/boards.cmake:265 (message):
+  No board named 'no_such_board' found.
+
+  Run 'west boards' for the full list.
+Call Stack (most recent call first):
+  /ws/zephyr/cmake/modules/zephyr_default.cmake:115 (include)
+  /ws/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:57 (include)
+  /ws/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:83 (include_boilerplate)
+  CMakeLists.txt:2 (find_package)
+
+
+FATAL ERROR: command exited with status 1: /usr/bin/cmake -DWEST_PYTHON=/ws/.venv/bin/python -DWEST_TOPDIR=/ws -DWEST_VERSION=1.5.0 -B/ws/app/build/default -GNinja '-DWEST_PYTHON_PROPERTIES="Python;3;13;13;64;;cpython-313-x86_64-linux-gnu.so;abi3;/usr/lib/python3.13;/ws/.venv/lib/python3.13;/ws/.venv/lib/python3.13/site-packages;/ws/.venv/lib/python3.13/site-packages"' -DBOARD=no_such_board -S/ws/app

@@ -1,0 +1,27 @@
+-- west build: generating a build system
+Loading Zephyr default modules (Zephyr base).
+-- Application: /ws/app
+-- Board: qemu_cortex_m3, qualifiers: ti_lm3s6965
+-- Found toolchain: zephyr 1.0.0 (/opt/zephyr-sdk-1.0.0)
+
+warning: UART_NRFX (defined at drivers/serial/Kconfig.nrfx:6) was assigned the value 'y' but got the
+value 'n'. Check these unsatisfied dependencies: (DT_HAS_NORDIC_NRF_UART_ENABLED ||
+DT_HAS_NORDIC_NRF_UARTE_ENABLED) (=n). See
+http://docs.zephyrproject.org/latest/kconfig.html#CONFIG_UART_NRFX and/or look up UART_NRFX in the
+menuconfig/guiconfig interface. The Application Development Primer, Setting Configuration Values,
+and Kconfig - Tips and Best Practices sections of the manual might be helpful too.
+
+Parsing /ws/zephyr/Kconfig
+Loaded configuration '/ws/zephyr/boards/qemu/cortex_m3/qemu_cortex_m3_defconfig'
+Merged configuration '/ws/app/prj.conf'
+Configuration saved to '/ws/app/build/default/zephyr/.config'
+Kconfig header saved to '/ws/app/build/default/zephyr/include/generated/zephyr/autoconf.h'
+-- west build: building application
+[1/134] Preparing syscall dependency handling
+
+[134/134] Linking C executable zephyr/zephyr.elf
+Memory region         Used Size  Region Size  %age Used
+           FLASH:       10252 B       256 KB      3.91%
+             RAM:        4176 B        64 KB      6.37%
+        IDT_LIST:           0 B        32 KB      0.00%
+Generating files from /ws/app/build/default/zephyr/zephyr.elf for board: qemu_cortex_m3/ti_lm3s6965

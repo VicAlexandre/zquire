@@ -1,0 +1,21 @@
+-- west build: generating a build system
+Loading Zephyr default modules (Zephyr base).
+-- Application: /ws/app
+-- Board: qemu_cortex_m3, qualifiers: ti_lm3s6965
+-- Found toolchain: zephyr 1.0.0 (/opt/zephyr-sdk-1.0.0)
+Parsing /ws/zephyr/Kconfig
+Loaded configuration '/ws/zephyr/boards/qemu/cortex_m3/qemu_cortex_m3_defconfig'
+Merged configuration '/ws/app/prj.conf'
+Configuration saved to '/ws/app/build/default/zephyr/.config'
+Kconfig header saved to '/ws/app/build/default/zephyr/include/generated/zephyr/autoconf.h'
+-- west build: building application
+[1/134] Preparing syscall dependency handling
+
+FAILED: [code=1] CMakeFiles/app.dir/src/main.c.obj 
+/ws/app/src/main.c: In function 'main':
+/ws/app/src/main.c:42:18: error: implicit declaration of function 'foo' [-Wimplicit-function-declaration]
+   42 | int main(void) { foo(); return 0; }
+      |                  ^~~
+[26/134] Building C object zephyr/CMakeFiles/zephyr.dir/lib/heap/heap.c.obj
+ninja: build stopped: subcommand failed.
+FATAL ERROR: command exited with status 1: /usr/bin/cmake --build /ws/app/build/default
