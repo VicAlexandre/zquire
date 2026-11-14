@@ -35,6 +35,7 @@ dependencies = { file = ["scripts/requirements.txt"] }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = ["requirement(id): spec requirement a Gherkin scenario verifies"]
 
 [tool.coverage.run]
 branch = true
