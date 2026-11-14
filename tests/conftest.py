@@ -85,6 +85,12 @@ FAKE_TOOLS = {
 NO_WORKSPACE = Context(None)
 
 
+@pytest.fixture(autouse=True)
+def isolated_west_config(tmp_path, monkeypatch):
+    for level in ("GLOBAL", "SYSTEM"):
+        monkeypatch.setenv(f"WEST_CONFIG_{level}", str(tmp_path / f"west-{level.lower()}.cfg"))
+
+
 def pytest_bdd_apply_tag(tag, function):
     pytest.mark.requirement(tag)(function)
     return True

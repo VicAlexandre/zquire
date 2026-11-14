@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import jsonschema
 
+from zquire.core import profiles
 from zquire.core.context import Context
 from zquire.core.status import status
 from zquire.errors import ZquireError
@@ -53,6 +54,7 @@ _STATUS_OUTPUT = {
                 "topology_evidence": {"type": "array", "items": {"type": "string"}},
                 "application_candidates": {"type": "array", "items": {"type": "string"}},
                 "default_application": _STRING_OR_NULL,
+                "active_profile": _STRING_OR_NULL,
             },
             "required": [
                 "root",
@@ -64,6 +66,7 @@ _STATUS_OUTPUT = {
                 "topology_evidence",
                 "application_candidates",
                 "default_application",
+                "active_profile",
             ],
         },
         "warnings": {
@@ -78,6 +81,48 @@ _STATUS_OUTPUT = {
     "required": ["zquire_version", "sdk_version", "workspace", "warnings"],
 }
 
+_STRINGS = {"type": "array", "items": {"type": "string"}}
+
+_SETTINGS = {
+    "application": {
+        "type": "string",
+        "description": "Application directory, relative to the workspace root.",
+    },
+    "board": {"type": "string", "description": "Board target, e.g. nrf52840dk/nrf52840."},
+    "build_dir": {
+        "type": "string",
+        "description": "Build directory, relative to the workspace root.",
+    },
+    "pristine": {"enum": ["auto", "always", "never"]},
+    "cmake_args": _STRINGS,
+    "conf_files": {**_STRINGS, "description": "Extra Kconfig fragments (EXTRA_CONF_FILE)."},
+    "overlays": {**_STRINGS, "description": "Devicetree overlays (EXTRA_DTC_OVERLAY_FILE)."},
+    "snippets": _STRINGS,
+    "shields": _STRINGS,
+}
+
+_PROFILE = {
+    "type": "object",
+    "properties": {"name": {"type": "string"}, **_SETTINGS},
+    "required": ["name", *_SETTINGS],
+}
+
+_NAME = {"name": {"type": "string"}}
+
+
+def _input(properties: dict, required: list[str]) -> dict:
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "additionalProperties": False,
+    }
+
+
+def _output(properties: dict) -> dict:
+    return {"type": "object", "properties": properties, "required": list(properties)}
+
+
 TOOLS = {
     tool.name: tool
     for tool in [
@@ -91,6 +136,84 @@ TOOLS = {
             output_schema=_STATUS_OUTPUT,
             handler=status,
             needs_workspace=False,
+        ),
+        Tool(
+            name="profile_list",
+            description="List the build profiles, their settings and which one is active.",
+            input_schema=_input({}, []),
+            output_schema=_output(
+                {
+                    "profiles": {
+                        "type": "array",
+                        "items": {
+                            **_PROFILE,
+                            "properties": {**_PROFILE["properties"], "active": {"type": "boolean"}},
+                            "required": [*_PROFILE["required"], "active"],
+                        },
+                    }
+                }
+            ),
+            handler=profiles.list_profiles,
+        ),
+        Tool(
+            name="profile_create",
+            description=(
+                "Create a named build profile. Without application or board, uses the "
+                "workspace's single default application and `west config build.board`, "
+                "and reports which defaults it applied."
+            ),
+            input_schema=_input(
+                {
+                    **_NAME,
+                    "from": {"type": "string", "description": "Profile to copy settings from."},
+                    **_SETTINGS,
+                },
+                ["name"],
+            ),
+            output_schema=_output(
+                {
+                    "profile": _PROFILE,
+                    "defaults_applied": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "setting": {"type": "string"},
+                                "source": {"type": "string"},
+                                "level": {"type": "string"},
+                            },
+                            "required": ["setting", "source"],
+                        },
+                    },
+                }
+            ),
+            handler=profiles.create,
+        ),
+        Tool(
+            name="profile_update",
+            description="Change settings of an existing build profile.",
+            input_schema=_input({**_NAME, **_SETTINGS}, ["name"]),
+            output_schema=_output({"profile": _PROFILE}),
+            handler=profiles.update,
+        ),
+        Tool(
+            name="profile_delete",
+            description=(
+                "Delete a build profile. Its build directory is kept unless remove_build_dir "
+                "is true. The active profile cannot be deleted."
+            ),
+            input_schema=_input({**_NAME, "remove_build_dir": {"type": "boolean"}}, ["name"]),
+            output_schema=_output(
+                {"deleted": {"type": "string"}, "build_dir_removed": {"type": "boolean"}}
+            ),
+            handler=profiles.delete,
+        ),
+        Tool(
+            name="profile_activate",
+            description="Make a build profile the default for every tool. Does not rebuild.",
+            input_schema=_input(_NAME, ["name"]),
+            output_schema=_output({"active_profile": {"type": "string"}}),
+            handler=profiles.activate,
         ),
     ]
 }
