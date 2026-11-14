@@ -1,2 +1,3 @@
 mcp>=2.3
 jsonschema>=4.18
+west>=1.2
