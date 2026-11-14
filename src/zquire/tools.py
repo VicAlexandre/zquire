@@ -201,8 +201,8 @@ TOOLS = {
         Tool(
             name="profile_list",
             description=(
-                "List the build profiles, their settings, which one is active and how each "
-                "was last built."
+                "List the build profiles, their settings, which one is active, how each was "
+                "last built and whether that build is stale."
             ),
             input_schema=_input({}, []),
             output_schema=_output(
@@ -215,8 +215,17 @@ TOOLS = {
                                 **_PROFILE["properties"],
                                 "active": {"type": "boolean"},
                                 "last_build": _LAST_BUILD,
+                                "stale": {
+                                    "type": ["boolean", "null"],
+                                    "description": (
+                                        "Whether the application, the profile's fragments or "
+                                        "overlays, its settings or the zephyr checkout changed "
+                                        "since its last successful build. Null if it never "
+                                        "built successfully."
+                                    ),
+                                },
                             },
-                            "required": [*_PROFILE["required"], "active", "last_build"],
+                            "required": [*_PROFILE["required"], "active", "last_build", "stale"],
                         },
                     }
                 }
