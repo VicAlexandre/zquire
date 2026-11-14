@@ -1,14 +1,17 @@
 import re
 from pathlib import Path
 
-from zquire.core.topology import Topology, is_zephyr_tree
+from zquire.core.topology import is_zephyr_tree
 from zquire.core.workspace import Workspace
 
 
-def zephyr_base(workspace: Workspace, topology: Topology) -> Path | None:
-    if topology.kind == "T1":
-        return workspace.manifest.repository
-    path = (workspace.manifest.projects or {}).get("zephyr")
+def zephyr_base(workspace: Workspace) -> Path | None:
+    manifest = workspace.manifest
+    if manifest.projects is None:
+        return None
+    if is_zephyr_tree(manifest.repository):
+        return manifest.repository
+    path = manifest.projects.get("zephyr")
     return path if path is not None and is_zephyr_tree(path) else None
 
 
