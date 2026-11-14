@@ -47,11 +47,11 @@ def _choose_profile(
 def west_arguments(workspace: Workspace, settings: dict, pristine: str) -> list[str]:
     arguments = [
         "-d",
-        str(profiles.workspace_path(workspace, settings["build_dir"])),
+        str(workspace.resolve(settings["build_dir"])),
         "-b",
         settings["board"],
         "-s",
-        str(profiles.workspace_path(workspace, settings["application"])),
+        str(workspace.resolve(settings["application"])),
         "-p",
         pristine,
     ]

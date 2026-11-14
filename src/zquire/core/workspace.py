@@ -12,6 +12,10 @@ class Workspace:
     def relative(self, path: Path) -> str:
         return path.relative_to(self.root).as_posix()
 
+    def resolve(self, path: str) -> Path:
+        """Resolve a stored path, which is relative to the root unless absolute."""
+        return (self.root / path).resolve()
+
 
 def locate(start: Path, explicit: Path | None = None) -> Workspace | None:
     if explicit is not None:
