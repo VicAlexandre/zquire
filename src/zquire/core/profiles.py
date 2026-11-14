@@ -74,10 +74,6 @@ def _view(name: str, settings: dict) -> dict:
     return {"name": name, **settings}
 
 
-def workspace_path(workspace: Workspace, path: str) -> Path:
-    return (workspace.root / path).resolve()
-
-
 def _stored_path(workspace: Workspace, path: Path) -> str:
     try:
         return path.relative_to(workspace.root).as_posix()
@@ -86,9 +82,9 @@ def _stored_path(workspace: Workspace, path: Path) -> str:
 
 
 def _check_build_dir_free(workspace: Workspace, profiles: dict, name: str, build_dir: str) -> None:
-    wanted = workspace_path(workspace, build_dir)
+    wanted = workspace.resolve(build_dir)
     for other, settings in profiles.items():
-        if other != name and workspace_path(workspace, settings["build_dir"]) == wanted:
+        if other != name and workspace.resolve(settings["build_dir"]) == wanted:
             raise ZquireError(
                 "BUILD_DIR_IN_USE",
                 f"Build directory '{build_dir}' is already used by profile '{other}'.",
@@ -122,7 +118,7 @@ def _default_board(workspace: Workspace) -> tuple[str, str]:
 def _normalised(workspace: Workspace, settings: dict) -> dict:
     for key in ("application", "build_dir"):
         if key in settings:
-            settings[key] = _stored_path(workspace, workspace_path(workspace, settings[key]))
+            settings[key] = _stored_path(workspace, workspace.resolve(settings[key]))
     return settings
 
 
@@ -180,7 +176,7 @@ def delete(context: Context, name: str, remove_build_dir: bool = False) -> dict:
             f"'{name}' is the active profile.",
             "Activate another profile first.",
         )
-    build_dir = workspace_path(workspace, settings["build_dir"])
+    build_dir = workspace.resolve(settings["build_dir"])
     removed = remove_build_dir and build_dir.is_dir()
     if removed:
         _check_removable(workspace, build_dir, settings)
@@ -196,7 +192,7 @@ def delete(context: Context, name: str, remove_build_dir: bool = False) -> dict:
 
 
 def _check_removable(workspace: Workspace, build_dir: Path, settings: dict) -> None:
-    application = workspace_path(workspace, settings["application"])
+    application = workspace.resolve(settings["application"])
     inside = workspace.root in build_dir.parents
     if not inside or build_dir == application or build_dir in application.parents:
         raise ZquireError(
