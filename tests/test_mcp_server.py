@@ -30,6 +30,18 @@ def test_registered_tools_without_required_arguments_succeed(name, tmp_path):
     jsonschema.validate(result.structured_content, TOOLS[name].output_schema)
 
 
+@pytest.mark.parametrize("name", TOOLS)
+def test_registered_tools_reject_unknown_arguments(name, tmp_path):
+    result = call_mcp(build_server(Context(locate(t2(tmp_path)))), name, {"bogus": 1})
+    assert json.loads(result.content[0].text)["code"] == "INVALID_ARGUMENT"
+
+
+@pytest.mark.parametrize("name", [n for n, t in TOOLS.items() if t.input_schema.get("required")])
+def test_registered_tools_reject_missing_required_arguments(name, tmp_path):
+    result = call_mcp(build_server(Context(locate(t2(tmp_path)))), name, {})
+    assert json.loads(result.content[0].text)["code"] == "INVALID_ARGUMENT"
+
+
 def test_success_mirrors_structured_content_as_text(fake_tools):
     result = call_mcp(
         build_server(NO_WORKSPACE, fake_tools), "echo", {"text": "hi", "repeat_count": 2}
