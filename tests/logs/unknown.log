@@ -1,0 +1,26 @@
+-- west build: generating a build system
+Loading Zephyr default modules (Zephyr base).
+-- Application: /ws/app
+-- Board: qemu_cortex_m3, qualifiers: ti_lm3s6965
+-- Found toolchain: zephyr 1.0.0 (/opt/zephyr-sdk-1.0.0)
+Parsing /ws/zephyr/Kconfig
+Loaded configuration '/ws/zephyr/boards/qemu/cortex_m3/qemu_cortex_m3_defconfig'
+Merged configuration '/ws/app/prj.conf'
+Configuration saved to '/ws/app/build/default/zephyr/.config'
+Kconfig header saved to '/ws/app/build/default/zephyr/include/generated/zephyr/autoconf.h'
+-- west build: building application
+[1/134] Preparing syscall dependency handling
+
+FAILED: [code=1] zephyr/include/generated/zephyr/kobj-types-enum.h zephyr/include/generated/zephyr/otype-to-str.h zephyr/include/generated/zephyr/otype-to-size.h /ws/app/build/default/zephyr/include/generated/zephyr/kobj-types-enum.h /ws/app/build/default/zephyr/include/generated/zephyr/otype-to-str.h /ws/app/build/default/zephyr/include/generated/zephyr/otype-to-size.h 
+Traceback (most recent call last):
+  File "/ws/zephyr/scripts/build/gen_kobject_list.py", line 61, in <module>
+    import elftools
+ModuleNotFoundError: No module named 'elftools'
+FAILED: [code=1] zephyr/include/generated/zephyr/driver-validation.h /ws/app/build/default/zephyr/include/generated/zephyr/driver-validation.h 
+Traceback (most recent call last):
+  File "/ws/zephyr/scripts/build/gen_kobject_list.py", line 61, in <module>
+    import elftools
+ModuleNotFoundError: No module named 'elftools'
+[8/134] Generating include/generated/zephyr/syscall_dispatch.c, include/generated/zephyr/syscall_exports_llext.c, syscall_weakdefs_llext.c, include/generated/zephyr/syscall_list.h
+ninja: build stopped: subcommand failed.
+FATAL ERROR: command exited with status 1: /usr/bin/cmake --build /ws/app/build/default

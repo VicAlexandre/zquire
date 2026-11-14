@@ -1,0 +1,79 @@
+-- west build: generating a build system
+Loading Zephyr default modules (Zephyr base).
+-- Application: /ws/app
+-- Board: qemu_cortex_m3, qualifiers: ti_lm3s6965
+-- Found toolchain: zephyr 1.0.0 (/opt/zephyr-sdk-1.0.0)
+Parsing /ws/zephyr/Kconfig
+Loaded configuration '/ws/zephyr/boards/qemu/cortex_m3/qemu_cortex_m3_defconfig'
+Merged configuration '/ws/app/prj.conf'
+Configuration saved to '/ws/app/build/default/zephyr/.config'
+Kconfig header saved to '/ws/app/build/default/zephyr/include/generated/zephyr/autoconf.h'
+-- west build: building application
+[1/146] Preparing syscall dependency handling
+
+In file included from /ws/app/src/f8.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f1.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f2.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f3.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f5.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f4.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f11.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f6.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f9.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f12.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f10.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+In file included from /ws/app/src/f7.c:1:
+/ws/app/src/h.h: In function 'g':
+/ws/app/src/h.h:1:33: warning: unused variable 'unused' [-Wunused-variable]
+    1 | static inline int g(void) { int unused; return 0; }
+      |                                 ^~~~~~
+[146/146] Linking C executable zephyr/zephyr.elf
+Memory region         Used Size  Region Size  %age Used
+           FLASH:       10252 B       256 KB      3.91%
+             RAM:        4176 B        64 KB      6.37%
+        IDT_LIST:           0 B        32 KB      0.00%
+Generating files from /ws/app/build/default/zephyr/zephyr.elf for board: qemu_cortex_m3/ti_lm3s6965
