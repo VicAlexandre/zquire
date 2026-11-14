@@ -9,6 +9,16 @@ else:
     import tomli as tomllib
 
 
+def prepare_state_dir(root: Path) -> Path:
+    directory = root / ".zquire"
+    ignore = directory / ".gitignore"
+    if not ignore.exists():
+        directory.mkdir(exist_ok=True)
+        # Keeps zquire's state untracked when the topdir sits inside a git repository.
+        ignore.write_text("*\n")
+    return directory
+
+
 def read_toml(path: Path) -> dict:
     return tomllib.loads(path.read_text()) if path.is_file() else {}
 

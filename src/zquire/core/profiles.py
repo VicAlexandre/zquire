@@ -2,7 +2,7 @@ import re
 import shutil
 from pathlib import Path
 
-from zquire.adapters.store import read_toml, write_toml
+from zquire.adapters.store import prepare_state_dir, read_toml, write_toml
 from zquire.adapters.west import config_value
 from zquire.core.context import Context
 from zquire.core.topology import infer
@@ -28,14 +28,6 @@ def _state_file(workspace: Workspace) -> Path:
     return workspace.root / ".zquire" / "state.toml"
 
 
-def _ignore_in_git(workspace: Workspace) -> None:
-    ignore = workspace.root / ".zquire" / ".gitignore"
-    if not ignore.exists():
-        ignore.parent.mkdir(exist_ok=True)
-        # Keeps zquire's state untracked when the topdir sits inside a git repository.
-        ignore.write_text("*\n")
-
-
 def load(workspace: Workspace) -> dict[str, dict]:
     return read_toml(_profiles_file(workspace))
 
@@ -45,14 +37,14 @@ def active_profile(workspace: Workspace) -> str | None:
 
 
 def _save(workspace: Workspace, profiles: dict[str, dict]) -> None:
-    _ignore_in_git(workspace)
+    prepare_state_dir(workspace.root)
     write_toml(_profiles_file(workspace), profiles)
 
 
 def _set_active(workspace: Workspace, name: str) -> None:
     state = read_toml(_state_file(workspace))
     state["active_profile"] = name
-    _ignore_in_git(workspace)
+    prepare_state_dir(workspace.root)
     write_toml(_state_file(workspace), state)
 
 
