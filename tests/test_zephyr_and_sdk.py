@@ -2,14 +2,12 @@ import pytest
 
 from tests.workspaces import make_workspace, manifest, t1, t2, t3, under, zephyr_tree
 from zquire.core.sdk import sdk_version
-from zquire.core.topology import infer
 from zquire.core.workspace import locate
 from zquire.core.zephyr import zephyr_base, zephyr_version
 
 
 def base_of(root):
-    workspace = locate(root)
-    return zephyr_base(workspace, infer(workspace))
+    return zephyr_base(locate(root))
 
 
 @pytest.mark.parametrize("make", [t2, t3], ids=["T2", "T3"])

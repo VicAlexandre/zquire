@@ -22,7 +22,7 @@ def status(context: Context) -> dict:
 
 def _describe(workspace: Workspace) -> dict:
     topology = infer(workspace)
-    base = zephyr_base(workspace, topology)
+    base = zephyr_base(workspace)
     candidates = [workspace.relative(path) for path in topology.candidates]
     return {
         "root": str(workspace.root),
