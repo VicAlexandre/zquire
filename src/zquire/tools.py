@@ -6,7 +6,7 @@ import jsonschema
 from zquire.core import profiles
 from zquire.core.build import LOG_LINES, build, build_log
 from zquire.core.context import Context
-from zquire.core.queries import kconfig_symbol
+from zquire.core.queries import devicetree_node, kconfig_symbol
 from zquire.core.status import status
 from zquire.errors import ZquireError
 
@@ -391,6 +391,38 @@ TOOLS = {
                 }
             ),
             handler=kconfig_symbol,
+        ),
+        Tool(
+            name="devicetree_node",
+            description=(
+                "Look up a devicetree node in a profile's build by label or path: its status, "
+                "compatible and properties. Defaults to the active profile."
+            ),
+            input_schema=_input(
+                {
+                    "node": {
+                        "type": "string",
+                        "description": "A label, like 'i2c0', or a path, like '/soc/i2c@40003000'.",
+                    },
+                    "profile": {"type": "string"},
+                },
+                ["node"],
+            ),
+            output_schema=_output(
+                {
+                    "profile": {"type": "string"},
+                    "path": {"type": "string"},
+                    "labels": _STRINGS,
+                    "status": {"type": "string"},
+                    "compatible": _STRINGS,
+                    "properties": {
+                        "type": "object",
+                        "additionalProperties": {"type": ["string", "boolean"]},
+                        "description": "Values as written in zephyr.dts; true for empty ones.",
+                    },
+                }
+            ),
+            handler=devicetree_node,
         ),
     ]
 }

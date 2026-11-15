@@ -213,6 +213,142 @@ def test_unknown_profile(root):
     assert fails(root, "kconfig_symbol", symbol="GPIO", profile="nope").code == "PROFILE_NOT_FOUND"
 
 
+DTS = r"""/dts-v1/;
+
+/* node '/' defined in zephyr/dts/common/skeleton.dtsi:9 */
+/ {
+	#address-cells = < 0x1 >; /* in zephyr/dts/common/skeleton.dtsi:10 */
+	model = "Bench; board {v2}";
+	compatible = "vendor,bench",
+		"vendor,soc";
+
+	chosen {
+		zephyr,console = &uart0;
+	};
+
+	soc {
+		ranges;
+
+		i2c0: arduino_i2c: i2c@40003000 {
+			compatible = "nordic,nrf-twim";
+			reg = < 0x40003000 0x1000 >; // the controller
+			clock-frequency = < 0x186a0 >;
+			label = "say \"hi; /* not a comment */ \\";
+			empty = "";
+			cells = /**/< 0x1 >;
+		};
+
+		uart0: uart@40002000 {
+			compatible = "nordic,nrf-uarte";
+			status = "disabled";
+		};
+	};
+};
+"""
+
+
+def node(root, wanted, **arguments):
+    return call(root, "devicetree_node", node=wanted, **arguments)
+
+
+@pytest.mark.parametrize(
+    "wanted",
+    ["i2c0", "&i2c0", "arduino_i2c", "/soc/i2c@40003000", "/soc/i2c@40003000/"],
+    ids=["label", "reference", "second-label", "path", "trailing-slash"],
+)
+def test_node_found_by_label_or_path(root, wanted):
+    built(root, dts=DTS)
+    assert node(root, wanted)["path"] == "/soc/i2c@40003000"
+
+
+def test_node_details(root):
+    built(root, dts=DTS)
+    assert node(root, "i2c0") == {
+        "profile": "one",
+        "path": "/soc/i2c@40003000",
+        "labels": ["i2c0", "arduino_i2c"],
+        "status": "okay",
+        "compatible": ["nordic,nrf-twim"],
+        "properties": {
+            "compatible": '"nordic,nrf-twim"',
+            "reg": "< 0x40003000 0x1000 >",
+            "clock-frequency": "< 0x186a0 >",
+            "label": r'"say \"hi; /* not a comment */ \\"',
+            "empty": '""',
+            "cells": "< 0x1 >",
+        },
+    }
+
+
+def test_root_node(root):
+    built(root, dts=DTS)
+    result = node(root, "/")
+    assert (result["path"], result["labels"]) == ("/", [])
+    assert result["compatible"] == ["vendor,bench", "vendor,soc"]
+    assert result["properties"]["compatible"] == '"vendor,bench", "vendor,soc"'
+    assert result["properties"]["model"] == '"Bench; board {v2}"'
+    assert result["properties"]["#address-cells"] == "< 0x1 >"
+
+
+def test_disabled_node(root):
+    built(root, dts=DTS)
+    assert node(root, "uart0")["status"] == "disabled"
+
+
+def test_empty_property_is_true(root):
+    built(root, dts=DTS)
+    assert node(root, "/soc") == {
+        "profile": "one",
+        "path": "/soc",
+        "labels": [],
+        "status": "okay",
+        "compatible": [],
+        "properties": {"ranges": True},
+    }
+
+
+def test_reference_values_are_kept_as_written(root):
+    built(root, dts=DTS)
+    assert node(root, "/chosen")["properties"] == {"zephyr,console": "&uart0"}
+
+
+@pytest.mark.parametrize("wanted", ["i2c1", "/soc/i2c", "/i2c@40003000", "soc"])
+def test_node_not_found(root, wanted):
+    built(root, dts=DTS)
+    assert fails(root, "devicetree_node", node=wanted).code == "NODE_NOT_FOUND"
+
+
+def test_named_profile_node(root):
+    built(root, dts=DTS)
+    built(root, profile="two", dts="/{X: nX{Y: m{};};};")
+    assert node(root, "Y", profile="two")["path"] == "/nX/m"
+    assert node(root, "/nX", profile="two")["labels"] == ["X"]
+
+
+@pytest.mark.parametrize("tail", ["/* unterminated", "// no newline", 'x = "unterminated'])
+def test_comment_at_the_end_of_the_file(root, tail):
+    built(root, dts=DTS + tail)
+    assert node(root, "i2c0")["status"] == "okay"
+
+
+def test_devicetree_that_is_not_utf8(root):
+    built(root)
+    (root / "app" / "build" / "one" / "zephyr" / "zephyr.dts").write_bytes(
+        b'/ {\n\tn: n {\n\t\tmodel = "\xff";\n\t};\n};\n'
+    )
+    assert node(root, "n")["properties"]["model"] == '"\ufffd"'
+
+
+def test_devicetree_without_a_build(root):
+    built(root)
+    no_build(root, "devicetree_node", "zephyr/zephyr.dts", node="i2c0")
+
+
+def test_devicetree_without_an_active_profile(tmp_path):
+    root = t3(tmp_path / "ws", "app")
+    assert fails(root, "devicetree_node", node="i2c0").code == "NO_BUILD"
+
+
 def test_build_files_that_are_not_utf8(root):
     built(root)
     ninja = root / "app" / "build" / "one" / "build.ninja"

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from zquire.adapters import kconfig
-from zquire.core import profiles
+from zquire.core import devicetree, profiles
 from zquire.core.context import Context
 from zquire.errors import ZquireError
 
@@ -50,3 +50,25 @@ def kconfig_symbol(context: Context, symbol: str, profile: str | None = None) ->
             "Check the symbol's name.",
         )
     return {"profile": name, **found}
+
+
+def devicetree_node(context: Context, node: str, profile: str | None = None) -> dict:
+    name, build_dir = _build_dir(context, profile)
+    dts = build_dir / "zephyr" / "zephyr.dts"
+    if not dts.is_file():
+        raise _no_build(name, "zephyr/zephyr.dts")
+    found = devicetree.find(devicetree.parse(dts.read_text(errors="replace")), node)
+    if found is None:
+        raise ZquireError(
+            "NODE_NOT_FOUND",
+            f"No devicetree node '{node}' in the build of profile '{name}'.",
+            "Give a node label, or a full path starting with '/'.",
+        )
+    return {
+        "profile": name,
+        "path": found.path,
+        "labels": found.labels,
+        "status": found.status,
+        "compatible": found.compatible,
+        "properties": found.properties,
+    }

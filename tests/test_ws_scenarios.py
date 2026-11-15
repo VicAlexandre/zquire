@@ -28,6 +28,11 @@ def test_explain_kconfig_symbol():
     pass
 
 
+@scenario("features/workspace.feature", "Look up a devicetree node by label")
+def test_look_up_devicetree_node():
+    pass
+
+
 @scenario("features/workspace.feature", "Query without a build")
 def test_query_without_build():
     pass
@@ -132,6 +137,15 @@ def kconfig_build(root):
     )
 
 
+@given(parsers.parse('an active build for a board with an enabled node labelled "{label}"'))
+def devicetree_build(root, label):
+    dts = (
+        f'/dts-v1/;\n/ {{\n\t{label}: i2c@40003000 {{\n\t\tcompatible = "nordic,nrf-twim";\n'
+        '\t\treg = < 0x40003000 0x1000 >;\n\t\tstatus = "okay";\n\t};\n};\n'
+    )
+    query_build(root, profiled(root), dts=dts)
+
+
 @given("no active build directory")
 def no_build(root):
     assert not profiled(root).exists()
@@ -142,6 +156,11 @@ def query_kconfig(root, name):
     return agent_calls(root, "kconfig_symbol", {"symbol": name})
 
 
+@when(parsers.parse('the agent queries devicetree node "{name}"'), target_fixture="result")
+def query_devicetree(root, name):
+    return agent_calls(root, "devicetree_node", {"node": name})
+
+
 @then(parsers.parse('the result shows value "{value}"'))
 def shows_value(result, value):
     assert result["value"] == value
@@ -150,6 +169,17 @@ def shows_value(result, value):
 @then("the result lists the symbol's unmet dependencies, if any")
 def lists_unmet(result):
     assert result["unmet_dependencies"] == ["SCHED_THREAD_USAGE"]
+
+
+@then(parsers.parse('the result shows status "{status}"'))
+def shows_status(result, status):
+    assert result["status"] == status
+
+
+@then("the result lists the node's compatible and properties")
+def lists_compatible_and_properties(result):
+    assert result["compatible"] == ["nordic,nrf-twim"]
+    assert result["properties"]["reg"] == "< 0x40003000 0x1000 >"
 
 
 @when(parsers.parse('the agent calls "{tool}"'), target_fixture="result")

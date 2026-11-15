@@ -120,8 +120,8 @@ def _cmake_quoted(path) -> str:
     return f'"{path}"' if " " in str(path) else str(path)
 
 
-def query_build(root: Path, build_dir: Path, kconfig="", config="", generator="ninja"):
-    """Leave in build_dir what a Zephyr build leaves for Kconfig queries.
+def query_build(root: Path, build_dir: Path, kconfig="", config="", dts=None, generator="ninja"):
+    """Leave in build_dir what a Zephyr build leaves for Kconfig and devicetree queries.
 
     The Kconfig tree starts at <root>/zephyr/Kconfig and is read with the kconfiglib the tests
     install, standing in for the copy in Zephyr's scripts/kconfig.
@@ -134,6 +134,8 @@ def query_build(root: Path, build_dir: Path, kconfig="", config="", generator="n
     shutil.copy(kconfiglib.__file__, zephyr / "scripts" / "kconfig" / "kconfiglib.py")
     (build_dir / "zephyr").mkdir(parents=True, exist_ok=True)
     (build_dir / "zephyr" / ".config").write_text(config)
+    if dts is not None:
+        (build_dir / "zephyr" / "zephyr.dts").write_text(dts)
     environment = (
         f"srctree={_cmake_quoted(zephyr)} ZEPHYR_BASE={_cmake_quoted(zephyr)} "
         f"KCONFIG_CONFIG={_cmake_quoted(build_dir / 'zephyr' / '.config')} ARCH=*"
