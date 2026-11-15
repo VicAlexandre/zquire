@@ -114,3 +114,46 @@ def build_output(root: Path, log: str, exit_code: int | None = None) -> str:
 def build_calls(root: Path) -> list[dict]:
     calls = root / "fake-build" / "calls.jsonl"
     return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
+
+
+def _cmake_quoted(path) -> str:
+    return f'"{path}"' if " " in str(path) else str(path)
+
+
+def query_build(root: Path, build_dir: Path, kconfig="", config="", generator="ninja"):
+    """Leave in build_dir what a Zephyr build leaves for Kconfig queries.
+
+    The Kconfig tree starts at <root>/zephyr/Kconfig and is read with the kconfiglib the tests
+    install, standing in for the copy in Zephyr's scripts/kconfig.
+    """
+    import kconfiglib
+
+    zephyr = root / "zephyr"
+    (zephyr / "Kconfig").write_text(kconfig)
+    (zephyr / "scripts" / "kconfig").mkdir(parents=True, exist_ok=True)
+    shutil.copy(kconfiglib.__file__, zephyr / "scripts" / "kconfig" / "kconfiglib.py")
+    (build_dir / "zephyr").mkdir(parents=True, exist_ok=True)
+    (build_dir / "zephyr" / ".config").write_text(config)
+    environment = (
+        f"srctree={_cmake_quoted(zephyr)} ZEPHYR_BASE={_cmake_quoted(zephyr)} "
+        f"KCONFIG_CONFIG={_cmake_quoted(build_dir / 'zephyr' / '.config')} ARCH=*"
+    )
+    command = (
+        f"cd {_cmake_quoted(build_dir / 'zephyr' / 'kconfig')} && /usr/bin/cmake -E env "
+        f"{environment} /usr/bin/python3 "
+        f"{_cmake_quoted(zephyr / 'scripts' / 'kconfig' / 'menuconfig.py')} "
+        f"{_cmake_quoted(zephyr / 'Kconfig')}"
+    )
+    if generator == "ninja":
+        (build_dir / "build.ninja").write_text(
+            "rule CUSTOM_COMMAND\n  command = $COMMAND\n\n"
+            "build zephyr/misc: CUSTOM_COMMAND\n  COMMAND = cd /b && /usr/bin/cmake -E env "
+            "KCONFIG_CONFIG=/elsewhere /usr/bin/python3 gen.py\n\n"
+            "build menuconfig: phony CMakeFiles/menuconfig # runs menuconfig.py\n\n"
+            "build CMakeFiles/menuconfig | ${cmake_ninja_workdir}CMakeFiles/menuconfig: "
+            f"CUSTOM_COMMAND\n  COMMAND = {command.replace('$', '$$')}\n  pool = console\n"
+        )
+    else:
+        make = build_dir / "CMakeFiles" / "menuconfig.dir" / "build.make"
+        make.parent.mkdir(parents=True, exist_ok=True)
+        make.write_text(f"CMakeFiles/menuconfig:\n\t{command.replace('$', '$$')}\n")

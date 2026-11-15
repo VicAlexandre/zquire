@@ -6,6 +6,7 @@ import jsonschema
 from zquire.core import profiles
 from zquire.core.build import LOG_LINES, build, build_log
 from zquire.core.context import Context
+from zquire.core.queries import kconfig_symbol
 from zquire.core.status import status
 from zquire.errors import ZquireError
 
@@ -362,6 +363,34 @@ TOOLS = {
                 }
             ),
             handler=build_log,
+        ),
+        Tool(
+            name="kconfig_symbol",
+            description=(
+                "Look up a Kconfig symbol in a profile's build: its type, value, whether it is "
+                "set, and the dependencies keeping it off. Defaults to the active profile."
+            ),
+            input_schema=_input(
+                {
+                    "symbol": {"type": "string", "description": "With or without CONFIG_."},
+                    "profile": {"type": "string"},
+                },
+                ["symbol"],
+            ),
+            output_schema=_output(
+                {
+                    "profile": {"type": "string"},
+                    "name": {"type": "string"},
+                    "type": {"type": "string"},
+                    "value": {"type": "string"},
+                    "set": {"type": "boolean", "description": "Whether .config sets it."},
+                    "unmet_dependencies": {
+                        **_STRINGS,
+                        "description": "Empty unless the symbol's dependencies are unmet.",
+                    },
+                }
+            ),
+            handler=kconfig_symbol,
         ),
     ]
 }
