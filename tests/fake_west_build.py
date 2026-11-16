@@ -1,7 +1,9 @@
-"""Stands in for Zephyr's `west build` in fixture workspaces, which provide it as a west extension.
+"""Stands in for Zephyr's `west build` and `west flash` in fixture workspaces, which provide
+them as west extensions.
 
-It records its arguments in <topdir>/fake-build/calls.jsonl, prints fake-build/output.log, then
-fake-build/stderr.log to stderr if present, and exits with the code in fake-build/exit_code.
+`build` records its arguments in <topdir>/fake-build/calls.jsonl, prints fake-build/output.log,
+then fake-build/stderr.log to stderr if present, and exits with the code in fake-build/exit_code.
+`flash` does the same with flash-calls.jsonl, flash-output.log and flash-exit_code.
 """
 
 import json
@@ -38,3 +40,23 @@ class Build(WestCommand):
         if stderr.exists():
             sys.stderr.write(stderr.read_text())
         sys.exit(int((fake / "exit_code").read_text()))
+
+
+class Flash(WestCommand):
+    def __init__(self):
+        super().__init__("flash", "fake west flash", "Replay a canned flash log.")
+
+    def do_add_parser(self, parser_adder):
+        parser = parser_adder.add_parser(self.name)
+        parser.add_argument("-d", dest="build_dir")
+        parser.add_argument("-r", dest="runner")
+        parser.add_argument("--no-rebuild", action="store_true")
+        return parser
+
+    def do_run(self, args, unknown):
+        fake = Path(self.topdir) / "fake-build"
+        call = {key: getattr(args, key) for key in ("build_dir", "runner", "no_rebuild")}
+        with (fake / "flash-calls.jsonl").open("a") as calls:
+            calls.write(json.dumps({**call, "verbosity": int(self.verbosity)}) + "\n")
+        sys.stdout.buffer.write((fake / "flash-output.log").read_bytes())
+        sys.exit(int((fake / "flash-exit_code").read_text()))

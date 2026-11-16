@@ -1,0 +1,25 @@
+forwarded to WestLogHandler(flash). propagate=True
+forwarded to WestLogHandler(flash). propagate=True
+forwarded to WestLogHandler(flash). propagate=True
+forwarded to WestLogHandler(flash). propagate=True
+-- west flash: using runner openocd
+Flashing file: /ws/app/build/default/zephyr/zephyr.hex
+/home/user/zephyr-sdk-1.0.0/hosttools/sysroots/x86_64-pokysdk-linux/usr/bin/openocd -s /ws/zephyr/boards/st/stm32f4_disco/support -s /home/user/zephyr-sdk-1.0.0/hosttools/sysroots/x86_64-pokysdk-linux/usr/share/openocd/scripts -f /ws/zephyr/boards/st/stm32f4_disco/support/openocd.cfg '-c init' '-c targets' -c 'reset init' -c 'flash write_image erase /ws/app/build/default/zephyr/zephyr.hex' -c 'reset run' -c shutdown
+Open On-Chip Debugger 0.12.0-01050-g91bd278a5 (2026-03-13-06:37)
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+Info : The selected transport took over low-level target control. The results might differ compared to plain JTAG/SWD
+Info : clock speed 2000 kHz
+Info : STLINK V2J45S7 (API v2) VID:PID 0483:3748
+Info : Target voltage: 2.884535
+Info : [stm32f4x.cpu] Cortex-M4 r0p1 processor detected
+Info : Device: STM32F40x/41x
+Info : flash size probed value 1024k
+** Programming Started **
+Info : Padding image section 0 at 0x080001cc with 4 bytes
+** Programming Finished **
+** Verify Started **
+** Verified OK **
+** Resetting Target **
+shutdown command invoked

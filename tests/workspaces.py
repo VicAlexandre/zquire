@@ -77,7 +77,7 @@ LOGS = Path(__file__).with_name("logs")
 
 
 def fake_west_build(root: Path) -> Path:
-    """Give the workspace a `west build` that replays a log instead of building."""
+    """Give the workspace a `west build` and `west flash` that replay logs instead."""
     config = configparser.ConfigParser()
     config.read(root / ".west" / "config")
     repository = root / config["manifest"]["path"]
@@ -90,11 +90,14 @@ def fake_west_build(root: Path) -> Path:
         "    commands:\n"
         "      - name: build\n"
         "        class: Build\n"
+        "      - name: flash\n"
+        "        class: Flash\n"
     )
     with (repository / config["manifest"]["file"]).open("a") as manifest_file:
         manifest_file.write("    west-commands: zquire-fake-build/west-commands.yml\n")
     (root / "fake-build").mkdir()
     build_output(root, "success")
+    flash_output(root, "flash-success")
     return root
 
 
@@ -109,6 +112,21 @@ def build_output(root: Path, log: str, exit_code: int | None = None) -> str:
         exit_code = 0 if log in ("success", "kconfig", "repeat") else 1
     (root / "fake-build" / "exit_code").write_text(str(exit_code))
     return output
+
+
+def flash_output(root: Path, log: str, exit_code: int | None = None) -> str:
+    """Make the next fake flash print tests/logs/<log>.log and exit with exit_code."""
+    output = re.sub(r"/ws\b", str(root), (LOGS / f"{log}.log").read_text())
+    (root / "fake-build" / "flash-output.log").write_text(output)
+    if exit_code is None:
+        exit_code = 0 if log == "flash-success" else 1
+    (root / "fake-build" / "flash-exit_code").write_text(str(exit_code))
+    return output
+
+
+def flash_calls(root: Path) -> list[dict]:
+    calls = root / "fake-build" / "flash-calls.jsonl"
+    return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
 
 
 def build_calls(root: Path) -> list[dict]:

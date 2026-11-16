@@ -1,0 +1,36 @@
+forwarded to WestLogHandler(flash). propagate=True
+forwarded to WestLogHandler(flash). propagate=True
+forwarded to WestLogHandler(flash). propagate=True
+forwarded to WestLogHandler(flash). propagate=True
+-- west flash: using runner jlink
+reset after flashing requested
+JLink executable: /opt/SEGGER/JLink/JLinkExe
+JLINKARM_GetDLLVersion()=94000
+JLink version: 9.40
+JLink commander script:
+ExitOnError 1
+r
+LE
+loadfile "/ws/app/build/default/zephyr/zephyr.hex"
+r
+g
+writeDP 1 0
+readDP 1
+q
+Flashing file: /ws/app/build/default/zephyr/zephyr.hex
+/opt/SEGGER/JLink/JLinkExe -nogui 1 -if swd -speed 4000 -device STM32F407VG -CommanderScript /tmp/tmpjlink/runner.jlink -nogui 1
+SEGGER J-Link Commander V9.40 (Compiled Apr 30 2026 09:16:17)
+DLL version V9.40, compiled Apr 30 2026 09:15:12
+
+
+J-Link Command File read successfully.
+Processing script file...
+J-Link>ExitOnError 1
+J-Link Commander will now exit on Error
+J-Link>r
+J-Link connection not established yet but required for command.
+Connecting to J-Link via USB...FAILED: Cannot connect to the probe/programmer.
+
+Script processing completed.
+
+FATAL ERROR: command exited with status 1: /opt/SEGGER/JLink/JLinkExe -nogui 1 -if swd -speed 4000 -device STM32F407VG -CommanderScript /tmp/tmpjlink/runner.jlink -nogui 1
