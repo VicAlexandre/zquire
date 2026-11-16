@@ -56,14 +56,14 @@ def config_value(topdir: Path, option: str) -> tuple[str, str] | None:
     return None
 
 
-def run_build(topdir: Path, arguments: list[str], log: Path) -> int:
-    """Run `west build` with output and errors interleaved into log, and return its exit code."""
+def run_west(topdir: Path, arguments: list[str], log: Path) -> int:
+    """Run west with output and errors interleaved into log, and return its exit code."""
     log.parent.mkdir(exist_ok=True)
     with log.open("w") as output:
         return subprocess.run(
-            [sys.executable, "-m", "west", "build", *arguments],
+            [sys.executable, "-m", "west", *arguments],
             cwd=topdir,
-            # Under `zquire serve` stdin carries the MCP stream, which the build must not read.
+            # Under `zquire serve` stdin carries the MCP stream, which west must not read.
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=subprocess.STDOUT,
