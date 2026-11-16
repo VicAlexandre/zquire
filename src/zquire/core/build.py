@@ -2,7 +2,7 @@ import time
 from datetime import datetime, timezone
 
 from zquire.adapters.store import prepare_state_dir
-from zquire.adapters.west import run_build
+from zquire.adapters.west import run_west
 from zquire.core import profiles, staleness
 from zquire.core.context import Context
 from zquire.core.diagnostics import diagnostics, memory_usage
@@ -106,9 +106,8 @@ def build(
         workspace, settings, time.time_ns(), staleness.build_dirs(workspace, existing)
     )
     started = time.monotonic()
-    exit_code = run_build(
-        workspace.root, west_arguments(workspace, settings, pristine or settings["pristine"]), log
-    )
+    arguments = west_arguments(workspace, settings, pristine or settings["pristine"])
+    exit_code = run_west(workspace.root, ["build", *arguments], log)
     duration = round(time.monotonic() - started, 3)
     output = log.read_text(errors="replace")
     succeeded = exit_code == 0
