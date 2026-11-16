@@ -1,0 +1,7 @@
+forwarded to WestLogHandler(flash). propagate=True
+forwarded to WestLogHandler(flash). propagate=True
+forwarded to WestLogHandler(flash). propagate=True
+forwarded to WestLogHandler(flash). propagate=True
+-- west flash: using runner stm32cubeprogrammer
+reset after flashing requested
+FATAL ERROR: required program /home/user/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_Programmer_CLI not found; install it or add its location to PATH
