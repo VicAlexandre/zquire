@@ -33,6 +33,10 @@ def build_log(workspace: Workspace, name: str) -> Path:
     return workspace.root / ".zquire" / "logs" / f"{name}-build.log"
 
 
+def flash_log(workspace: Workspace, name: str) -> Path:
+    return workspace.root / ".zquire" / "logs" / f"{name}-flash.log"
+
+
 def load(workspace: Workspace) -> dict[str, dict]:
     return read_toml(_profiles_file(workspace))
 
@@ -187,6 +191,7 @@ def delete(context: Context, name: str, remove_build_dir: bool = False) -> dict:
     if state.get("builds", {}).pop(name, None) is not None:
         write_state(workspace, state)
     build_log(workspace, name).unlink(missing_ok=True)
+    flash_log(workspace, name).unlink(missing_ok=True)
     if removed:
         shutil.rmtree(build_dir)
     return {"deleted": name, "build_dir_removed": removed}

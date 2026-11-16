@@ -6,6 +6,7 @@ import jsonschema
 from zquire.core import profiles
 from zquire.core.build import LOG_LINES, build, build_log
 from zquire.core.context import Context
+from zquire.core.flash import EXCERPT_LINES, flash
 from zquire.core.queries import devicetree_node, kconfig_symbol
 from zquire.core.status import status
 from zquire.errors import ZquireError
@@ -363,6 +364,50 @@ TOOLS = {
                 }
             ),
             handler=build_log,
+        ),
+        Tool(
+            name="flash",
+            description=(
+                "Flash the last successful build of the active or named profile with west flash, "
+                "without rebuilding. Warns when the build is stale."
+            ),
+            input_schema=_input(
+                {
+                    "profile": {"type": "string"},
+                    "runner": {"type": "string", "description": "Overrides the board's default."},
+                    "require_fresh": {
+                        "type": "boolean",
+                        "description": "Fail with STALE_BUILD instead of flashing a stale build.",
+                    },
+                },
+                [],
+            ),
+            output_schema=_output(
+                {
+                    "profile": {"type": "string"},
+                    "status": {"enum": ["success", "failure"]},
+                    "runner": _STRING_OR_NULL,
+                    "duration_s": {"type": "number"},
+                    "build_dir": {"type": "string"},
+                    "log_path": {"type": "string"},
+                    "log_excerpt": {
+                        "type": "string",
+                        "description": f"The log's last {EXCERPT_LINES} lines.",
+                    },
+                    "warnings": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "string"},
+                                "message": {"type": "string"},
+                            },
+                            "required": ["code", "message"],
+                        },
+                    },
+                }
+            ),
+            handler=flash,
         ),
         Tool(
             name="kconfig_symbol",

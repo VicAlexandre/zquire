@@ -4,7 +4,7 @@ import time
 import pytest
 from pytest_bdd import given, parsers, scenario, then, when
 
-from tests.workspaces import build_calls, fake_west_build, t3
+from tests.workspaces import build_calls, fake_west_build, flash_calls, t3
 from zquire.core.context import Context
 from zquire.core.workspace import locate
 from zquire.errors import ZquireError
@@ -15,6 +15,11 @@ FEATURE = "features/profiles.feature"
 
 @scenario(FEATURE, "Derive a debug profile from an existing one")
 def test_derive_a_debug_profile():
+    pass
+
+
+@scenario(FEATURE, "Switch the active profile")
+def test_switch_the_active_profile():
     pass
 
 
@@ -92,6 +97,37 @@ def attempt(outcome, root, tool, **arguments):
 @given(parsers.parse('profile "{name}" builds "{application}" for "{board}"'))
 def profile_builds(root, name, application, board):
     call(root, "profile_create", name=name, application=application, board=board)
+
+
+@given(parsers.parse('profiles "{first}" and "{second}" have both been built'))
+def both_built(root, first, second):
+    for name in (first, second):
+        call(root, "profile_create", name=name, application="app", board="b")
+        call(root, "build", profile=name)
+    call(root, "profile_activate", name=first)
+
+
+@when(parsers.parse('the agent calls "profile_activate" with "{name}"'))
+def activate(root, name):
+    call(root, "profile_activate", name=name)
+
+
+@when('the agent calls "flash"', target_fixture="builds_before")
+def flash(root, outcome):
+    builds_before = len(build_calls(root))
+    attempt(outcome, root, "flash")
+    return builds_before
+
+
+@then(parsers.parse('the firmware from "{build_dir}" is flashed'))
+def flashed_from(root, outcome, build_dir):
+    assert outcome["result"]["status"] == "success"
+    assert flash_calls(root)[-1]["build_dir"] == str(root / build_dir)
+
+
+@then("no build is run")
+def no_build_run(root, builds_before):
+    assert len(build_calls(root)) == builds_before
 
 
 @given(parsers.parse('profile "{name}" uses build directory "{build_dir}"'))
