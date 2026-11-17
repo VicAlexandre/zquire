@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from mcp import Client, MCPError
 
+from tests.serial_device import Device
 from tests.workspaces import fake_west_build, t2
 from zquire.core.context import Context
 from zquire.core.workspace import locate
@@ -96,6 +97,13 @@ def isolated_west_config(tmp_path, monkeypatch):
 def pytest_bdd_apply_tag(tag, function):
     pytest.mark.requirement(tag)(function)
     return True
+
+
+@pytest.fixture
+def device():
+    device = Device()
+    yield device
+    device.close()
 
 
 @pytest.fixture
