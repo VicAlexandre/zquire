@@ -8,6 +8,16 @@ from zquire.core.build import LOG_LINES, build, build_log
 from zquire.core.context import Context
 from zquire.core.flash import EXCERPT_LINES, flash
 from zquire.core.queries import devicetree_node, kconfig_symbol
+from zquire.core.serial import (
+    DEFAULT_BAUD,
+    DEFAULT_LIMIT,
+    DEFAULT_WAIT_S,
+    serial_close,
+    serial_open,
+    serial_read,
+    serial_wait,
+    serial_write,
+)
 from zquire.core.status import status
 from zquire.errors import ZquireError
 
@@ -185,6 +195,34 @@ def _input(properties: dict, required: list[str]) -> dict:
 def _output(properties: dict) -> dict:
     return {"type": "object", "properties": properties, "required": list(properties)}
 
+
+_SERIAL_ENTRY = {
+    "type": "object",
+    "properties": {
+        "cursor": {"type": "integer"},
+        "time": {"type": "string", "description": "Host time it was captured, in UTC."},
+        "kind": {"enum": ["rx", "tx"], "description": "Received from or sent to the device."},
+        "text": {"type": "string"},
+        "invalid_utf8": {
+            "type": "boolean",
+            "description": "Whether invalid UTF-8 was replaced with U+FFFD.",
+        },
+    },
+    "required": ["cursor", "time", "kind", "text", "invalid_utf8"],
+}
+
+_SERIAL_LIMIT = {
+    "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "description": f"Most lines to return. Default {DEFAULT_LIMIT}.",
+    }
+}
+
+_NEXT_CURSOR = {
+    "type": "integer",
+    "description": "Pass as cursor to continue after the lines returned.",
+}
 
 TOOLS = {
     tool.name: tool
@@ -468,6 +506,127 @@ TOOLS = {
                 }
             ),
             handler=devicetree_node,
+        ),
+        Tool(
+            name="serial_open",
+            description=(
+                "Open a serial capture on a port, or on the only USB serial port when none is "
+                "given. The capture keeps buffering lines until serial_close."
+            ),
+            input_schema=_input(
+                {
+                    "port": {
+                        "type": "string",
+                        "description": "Device, like /dev/ttyACM0. Detected when omitted.",
+                    },
+                    "baud": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": f"Default {DEFAULT_BAUD}.",
+                    },
+                },
+                [],
+            ),
+            output_schema=_output(
+                {
+                    "port": {"type": "string"},
+                    "baud": {"type": "integer"},
+                    "detected": {"type": "boolean"},
+                    "already_open": {
+                        "type": "boolean",
+                        "description": "Whether the capture was already open, and kept.",
+                    },
+                    "next_cursor": _NEXT_CURSOR,
+                }
+            ),
+            handler=serial_open,
+        ),
+        Tool(
+            name="serial_read",
+            description=(
+                "Read captured lines after a cursor, optionally only those matching a regex. "
+                "The cursor still advances past lines the filter leaves out."
+            ),
+            input_schema=_input(
+                {
+                    "cursor": {"type": "integer", "minimum": 0, "description": "Default 0."},
+                    **_SERIAL_LIMIT,
+                    "filter": {"type": "string", "description": "Python regex to search for."},
+                },
+                [],
+            ),
+            output_schema=_output(
+                {"lines": {"type": "array", "items": _SERIAL_ENTRY}, "next_cursor": _NEXT_CURSOR}
+            ),
+            handler=serial_read,
+        ),
+        Tool(
+            name="serial_wait",
+            description=(
+                "Wait for the device to print a line matching a regex after a cursor, or until "
+                "the timeout. On timeout, returns the lines captured meanwhile."
+            ),
+            input_schema=_input(
+                {
+                    "pattern": {"type": "string", "description": "Python regex to search for."},
+                    "timeout_s": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": f"Default {DEFAULT_WAIT_S}.",
+                    },
+                    "cursor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Default: the end of the buffer, so only new lines count.",
+                    },
+                    **_SERIAL_LIMIT,
+                },
+                ["pattern"],
+            ),
+            output_schema=_output(
+                {
+                    "status": {
+                        "enum": ["matched", "timeout", "closed"],
+                        "description": "closed if serial_close was called while waiting.",
+                    },
+                    "line": {**_SERIAL_ENTRY, "type": ["object", "null"]},
+                    "lines": {
+                        "type": "array",
+                        "items": _SERIAL_ENTRY,
+                        "description": "Lines captured while waiting, unless one matched.",
+                    },
+                    "next_cursor": _NEXT_CURSOR,
+                }
+            ),
+            handler=serial_wait,
+        ),
+        Tool(
+            name="serial_write",
+            description="Send text to the device, followed by a line ending, and record it.",
+            input_schema=_input(
+                {
+                    "text": {"type": "string"},
+                    "line_ending": {"type": "string", "description": "Default \\r\\n."},
+                },
+                ["text"],
+            ),
+            output_schema=_output(
+                {
+                    "cursor": {"type": "integer", "description": "Of the tx entry recorded."},
+                    "sent": {"type": "string"},
+                }
+            ),
+            handler=serial_write,
+        ),
+        Tool(
+            name="serial_close",
+            description="Close the serial capture and release its port.",
+            input_schema=_input({}, []),
+            output_schema=_output(
+                {"closed": {"type": "boolean", "description": "False if none was open."}}
+            ),
+            handler=serial_close,
         ),
     ]
 }

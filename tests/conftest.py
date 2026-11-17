@@ -107,12 +107,28 @@ def device():
 
 
 @pytest.fixture
-def ready_workspace(tmp_path):
-    """A T2 workspace with an active profile that the fake `west build` can build."""
+def ready_workspace(tmp_path, device, request, monkeypatch):
+    """A T2 workspace with an active profile that the fake `west build` can build, and a
+    serial capture open on a pseudo-terminal."""
     root = fake_west_build(t2(tmp_path / "ws"))
     context = Context(locate(root))
     invoke(TOOLS["build"], {"application": "application", "board": "b"}, context)
-    return root
+    with monkeypatch.context() as directory:
+        # The capture process inherits it, and under mutmut needs it to find mutmut's config.
+        directory.chdir(request.config.invocation_params.dir)
+        invoke(TOOLS["serial_open"], {"port": device.port}, context)
+    yield root
+    invoke(TOOLS["serial_close"], {}, context)
+
+
+@pytest.fixture
+def capture(tmp_path, device):
+    """A T2 workspace with a serial capture open on a pseudo-terminal."""
+    root = t2(tmp_path / "ws")
+    context = Context(locate(root))
+    invoke(TOOLS["serial_open"], {"port": device.port}, context)
+    yield root
+    invoke(TOOLS["serial_close"], {}, context)
 
 
 @pytest.fixture
