@@ -43,6 +43,7 @@ def test_open(root, device):
     assert call(root, "serial_open", port=device.port) == {
         "port": device.port,
         "baud": 115200,
+        "buffer_lines": 50000,
         "detected": False,
         "already_open": False,
         "next_cursor": 0,
@@ -57,8 +58,8 @@ def test_open_at_a_baud_rate(root, device):
 
 @pytest.mark.parametrize(
     "again",
-    [{}, {"port": "same"}, {"port": "link"}, {"baud": 115200}],
-    ids=["no-arguments", "same-port", "symlink", "same-baud"],
+    [{}, {"port": "same"}, {"port": "link"}, {"baud": 115200}, {"buffer_lines": 50000}],
+    ids=["no-arguments", "same-port", "symlink", "same-baud", "same-size"],
 )
 def test_open_again_keeps_the_capture(root, device, again):
     call(root, "serial_open", port=device.port)
@@ -73,18 +74,30 @@ def test_open_again_keeps_the_capture(root, device, again):
     assert call(root, "serial_open", **again) == {
         "port": device.port,
         "baud": 115200,
+        "buffer_lines": 50000,
         "detected": False,
         "already_open": True,
         "next_cursor": 2,
     }
 
 
-@pytest.mark.parametrize("other", [{"port": "other"}, {"baud": 9600}])
+@pytest.mark.parametrize("other", [{"port": "other"}, {"baud": 9600}, {"buffer_lines": 10}])
 def test_open_with_other_settings_while_open(root, device, other):
     call(root, "serial_open", port=device.port)
     error = fails(root, "serial_open", **other)
     assert error.code == "CAPTURE_OPEN"
-    assert device.port in error.message and "115200" in error.message
+    assert error.message == (
+        f"A serial capture is already open on {device.port} at 115200 baud, holding 50000 lines."
+    )
+
+
+def test_open_with_a_buffer_size(root, device):
+    assert call(root, "serial_open", port=device.port, buffer_lines=2)["buffer_lines"] == 2
+    assert call(root, "serial_open")["buffer_lines"] == 2
+    device.print("a\nb\nc\n")
+    captured(lambda tool, **a: call(root, tool, **a), 3)
+    read = call(root, "serial_read")
+    assert ([e["cursor"] for e in read["lines"]], read["truncated"]) == ([2, 3], True)
 
 
 def test_open_a_missing_port(root, tmp_path):
@@ -165,6 +178,7 @@ def test_pick_among_several_ports():
         ("serial_read", {}),
         ("serial_wait", {"pattern": "x"}),
         ("serial_write", {"text": "x"}),
+        ("serial_events", {}),
     ],
 )
 def test_tools_need_a_capture(root, tool, arguments):
@@ -263,12 +277,26 @@ def test_write_line_ending(capture, device):
     assert device.received(6, timeout=0.3) == b"help\n"
 
 
-def test_write_to_a_port_that_failed(capture, device):
+def test_write_to_a_port_that_disappeared(capture, device):
     device.hang_up()
+    captured(lambda tool, **a: call(capture, tool, **a), 1)
+    assert call(capture, "serial_read")["lines"][0]["kind"] == "disconnected"
     error = fails(capture, "serial_write", text="help")
-    assert error.code == "CAPTURE_FAILED"
-    assert f"writing to {device.port} failed" in error.message
-    assert call(capture, "serial_read")["lines"] == []
+    assert (error.code, error.message) == (
+        "CAPTURE_FAILED",
+        f"The serial capture failed: {device.port} is disconnected",
+    )
+    assert call(capture, "serial_read", cursor=1)["lines"] == []
+
+
+def test_events(capture, device):
+    device.print("*** Booting Zephyr OS ***\nok\n>>> ZEPHYR FATAL ERROR 4: Kernel panic\n")
+    captured(lambda tool, **a: call(capture, tool, **a), 3)
+    found = call(capture, "serial_events")
+    events = [(e["cursor"], e["event"]) for e in found["events"]]
+    assert events == [(1, "boot"), (3, "kernel_panic")]
+    assert (found["next_cursor"], found["truncated"]) == (3, False)
+    assert call(capture, "serial_events", cursor=1, limit=1)["events"][0]["cursor"] == 3
 
 
 def test_usb_ports_are_candidates():
