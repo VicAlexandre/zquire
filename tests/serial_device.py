@@ -31,8 +31,11 @@ class Device:
             self._controller = None
 
     def close(self) -> None:
+        """Close both ends, so the port's device file disappears as a USB device's does."""
         self.hang_up()
-        os.close(self._port)
+        if self._port is not None:
+            os.close(self._port)
+            self._port = None
 
 
 def captured(call, count: int, timeout: float = 5) -> None:

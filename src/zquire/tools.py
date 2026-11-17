@@ -13,11 +13,13 @@ from zquire.core.serial import (
     DEFAULT_LIMIT,
     DEFAULT_WAIT_S,
     serial_close,
+    serial_events,
     serial_open,
     serial_read,
     serial_wait,
     serial_write,
 )
+from zquire.core.serial_buffer import DEFAULT_CAPACITY
 from zquire.core.status import status
 from zquire.errors import ZquireError
 
@@ -201,14 +203,29 @@ _SERIAL_ENTRY = {
     "properties": {
         "cursor": {"type": "integer"},
         "time": {"type": "string", "description": "Host time it was captured, in UTC."},
-        "kind": {"enum": ["rx", "tx"], "description": "Received from or sent to the device."},
+        "kind": {
+            "enum": ["rx", "tx", "flash", "disconnected"],
+            "description": (
+                "Received from or sent to the device, or a marker: the port was released for "
+                "flashing, or disappeared."
+            ),
+        },
         "text": {"type": "string"},
         "invalid_utf8": {
             "type": "boolean",
             "description": "Whether invalid UTF-8 was replaced with U+FFFD.",
         },
+        "event": {
+            "enum": ["boot", "fatal_error", "assertion", "kernel_panic", None],
+            "description": "The Zephyr event a received line reports.",
+        },
     },
-    "required": ["cursor", "time", "kind", "text", "invalid_utf8"],
+    "required": ["cursor", "time", "kind", "text", "invalid_utf8", "event"],
+}
+
+_TRUNCATED = {
+    "type": "boolean",
+    "description": "Whether lines after the cursor were dropped to keep the buffer bounded.",
 }
 
 _SERIAL_LIMIT = {
@@ -217,6 +234,10 @@ _SERIAL_LIMIT = {
         "minimum": 1,
         "description": f"Most lines to return. Default {DEFAULT_LIMIT}.",
     }
+}
+
+_SERIAL_CURSOR = {
+    "cursor": {"type": "integer", "minimum": 0, "description": "Default 0."},
 }
 
 _NEXT_CURSOR = {
@@ -524,6 +545,13 @@ TOOLS = {
                         "minimum": 1,
                         "description": f"Default {DEFAULT_BAUD}.",
                     },
+                    "buffer_lines": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": (
+                            f"Most lines kept, dropping the oldest. Default {DEFAULT_CAPACITY}."
+                        ),
+                    },
                 },
                 [],
             ),
@@ -531,6 +559,7 @@ TOOLS = {
                 {
                     "port": {"type": "string"},
                     "baud": {"type": "integer"},
+                    "buffer_lines": {"type": "integer"},
                     "detected": {"type": "boolean"},
                     "already_open": {
                         "type": "boolean",
@@ -549,16 +578,36 @@ TOOLS = {
             ),
             input_schema=_input(
                 {
-                    "cursor": {"type": "integer", "minimum": 0, "description": "Default 0."},
+                    **_SERIAL_CURSOR,
                     **_SERIAL_LIMIT,
                     "filter": {"type": "string", "description": "Python regex to search for."},
                 },
                 [],
             ),
             output_schema=_output(
-                {"lines": {"type": "array", "items": _SERIAL_ENTRY}, "next_cursor": _NEXT_CURSOR}
+                {
+                    "lines": {"type": "array", "items": _SERIAL_ENTRY},
+                    "next_cursor": _NEXT_CURSOR,
+                    "truncated": _TRUNCATED,
+                }
             ),
             handler=serial_read,
+        ),
+        Tool(
+            name="serial_events",
+            description=(
+                "Return the captured lines tagged with a Zephyr event after a cursor: boot "
+                "banners, fatal errors, assertion failures and kernel panics."
+            ),
+            input_schema=_input({**_SERIAL_CURSOR, **_SERIAL_LIMIT}, []),
+            output_schema=_output(
+                {
+                    "events": {"type": "array", "items": _SERIAL_ENTRY},
+                    "next_cursor": _NEXT_CURSOR,
+                    "truncated": _TRUNCATED,
+                }
+            ),
+            handler=serial_events,
         ),
         Tool(
             name="serial_wait",
@@ -597,6 +646,7 @@ TOOLS = {
                         "description": "Lines captured while waiting, unless one matched.",
                     },
                     "next_cursor": _NEXT_CURSOR,
+                    "truncated": _TRUNCATED,
                 }
             ),
             handler=serial_wait,

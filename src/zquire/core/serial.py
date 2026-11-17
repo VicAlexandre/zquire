@@ -12,6 +12,7 @@ import zquire
 from zquire.adapters import ipc, serial_port
 from zquire.adapters.store import prepare_state_dir
 from zquire.core.context import Context
+from zquire.core.serial_buffer import DEFAULT_CAPACITY
 from zquire.core.workspace import Workspace
 from zquire.errors import ZquireError
 
@@ -89,7 +90,7 @@ def pick_port(candidates: list[serial_port.Candidate]) -> str:
     return candidates[0].device
 
 
-def _start(workspace: Workspace, device: str, baud: int) -> None:
+def _start(workspace: Workspace, device: str, baud: int, buffer_lines: int) -> None:
     socket = socket_path(workspace)
     # Left behind by a capture process that was killed.
     socket.unlink(missing_ok=True)
@@ -100,7 +101,8 @@ def _start(workspace: Workspace, device: str, baud: int) -> None:
     with log.open("a") as errors:
         process = subprocess.Popen(
             [sys.executable, "-c", "from zquire.core.serial_capture import run; run()"]
-            + ["--port", device, "--baud", str(baud), "--socket", str(socket)],
+            + ["--port", device, "--baud", str(baud), "--socket", str(socket)]
+            + ["--buffer-lines", str(buffer_lines)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=errors,
@@ -133,27 +135,42 @@ def _start(workspace: Workspace, device: str, baud: int) -> None:
     )
 
 
-def serial_open(context: Context, port: str | None = None, baud: int | None = None) -> dict:
+def serial_open(
+    context: Context,
+    port: str | None = None,
+    baud: int | None = None,
+    buffer_lines: int | None = None,
+) -> dict:
     workspace = context.workspace
     reply = _reply(workspace, {"op": "info"})
     if reply is not None:
         info = reply["result"]
         other_port = port is not None and os.path.realpath(port) != os.path.realpath(info["port"])
-        if other_port or (baud is not None and baud != info["baud"]):
+        other_baud = baud is not None and baud != info["baud"]
+        other_size = buffer_lines is not None and buffer_lines != info["buffer_lines"]
+        if other_port or other_baud or other_size:
             raise ZquireError(
                 "CAPTURE_OPEN",
-                f"A serial capture is already open on {info['port']} at {info['baud']} baud.",
-                "Call serial_close first to capture another port or baud rate.",
+                f"A serial capture is already open on {info['port']} at {info['baud']} baud, "
+                f"holding {info['buffer_lines']} lines.",
+                "Call serial_close first to change its port, baud rate or buffer size.",
             )
-        opened = {"port": info["port"], "baud": info["baud"], "detected": False}
+        opened = {
+            "port": info["port"],
+            "baud": info["baud"],
+            "buffer_lines": info["buffer_lines"],
+            "detected": False,
+        }
         return {**opened, "already_open": True, "next_cursor": info["next_cursor"]}
     detected = port is None
     device = pick_port(serial_port.usb_ports()) if detected else port
     baud = DEFAULT_BAUD if baud is None else baud
-    _start(workspace, device, baud)
+    buffer_lines = DEFAULT_CAPACITY if buffer_lines is None else buffer_lines
+    _start(workspace, device, baud, buffer_lines)
     return {
         "port": device,
         "baud": baud,
+        "buffer_lines": buffer_lines,
         "detected": detected,
         "already_open": False,
         "next_cursor": 0,
@@ -185,6 +202,10 @@ def serial_wait(
         "limit": limit,
     }
     return _request(context.workspace, message, timeout_s)
+
+
+def serial_events(context: Context, cursor: int = 0, limit: int = DEFAULT_LIMIT) -> dict:
+    return _request(context.workspace, {"op": "events", "cursor": cursor, "limit": limit})
 
 
 def serial_write(context: Context, text: str, line_ending: str = "\r\n") -> dict:
