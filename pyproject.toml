@@ -47,6 +47,10 @@ pytest_add_cli_args_test_selection = ["tests"]
 also_copy = ["scripts"]
 # Installed-package tests run the real zquire, not the mutants.
 pytest_add_cli_args = ["--ignore=tests/test_installed.py"]
+# Lines holding only a message or hint, which tests do not pin word for word.
+do_not_mutate_patterns = ['^\s*f?"[^"]*\s[^"]*"\s*,?\s*$']
+# Mutants that hang a wait or close are cut off sooner than mutmut's default of 15.
+timeout_multiplier = 3
 
 [tool.ruff]
 target-version = "py310"
