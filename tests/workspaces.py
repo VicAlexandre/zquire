@@ -124,6 +124,13 @@ def flash_output(root: Path, log: str, exit_code: int | None = None) -> str:
     return output
 
 
+def flash_port(root: Path, link: Path, device: str | None, delay: float = 0.3) -> None:
+    """Make the next fake flash check the port behind link is free, then re-enumerate it to
+    device after delay seconds, or remove it for good when device is None."""
+    hook = {"link": str(link), "device": device, "delay": delay}
+    (root / "fake-build" / "flash-port.json").write_text(json.dumps(hook))
+
+
 def flash_calls(root: Path) -> list[dict]:
     calls = root / "fake-build" / "flash-calls.jsonl"
     return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []

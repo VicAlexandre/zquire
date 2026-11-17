@@ -7,7 +7,7 @@ import pytest
 from pytest_bdd import given, parsers, scenario, then, when
 
 from tests.serial_device import Device, captured
-from tests.workspaces import fake_west_build, t3
+from tests.workspaces import fake_west_build, flash_port, t3
 from zquire.core.context import Context
 from zquire.core.workspace import locate
 from zquire.tools import TOOLS, invoke
@@ -42,6 +42,11 @@ def test_wait_times_out():
 
 @scenario(FEATURE, "Send a shell command")
 def test_send_a_shell_command():
+    pass
+
+
+@scenario(FEATURE, "Capture survives a reflash")
+def test_capture_survives_a_reflash():
     pass
 
 
@@ -111,6 +116,12 @@ def replugged():
 
 @given("a serial capture is open")
 def capture_open(call, console):
+    call("serial_open", port=str(console))
+
+
+@given("a serial capture is open on a USB-CDC board")
+def capture_open_on_a_board(call, console):
+    call("build", application="app", board="nrf52840dongle/nrf52840")
     call("serial_open", port=str(console))
 
 
@@ -239,6 +250,12 @@ def buffer_contains(call, outcome, kind):
     assert entries[0]["cursor"] == outcome["result"]["cursor"]
 
 
+@when('the agent calls "flash"')
+def agent_flashes(root, call, console, replugged, outcome):
+    flash_port(root, console, replugged.port, delay=0.5)
+    outcome["result"] = call("flash")
+
+
 @when("the port disappears")
 def port_disappears(device, console):
     device.close()
@@ -255,6 +272,21 @@ def device_prints_a_fatal_error(device, call, outcome):
 
 def markers(call, kind):
     return [e for e in call("serial_read", limit=1000)["lines"] if e["kind"] == kind]
+
+
+@then("the buffer contains a flash boundary")
+def flash_boundary(call, outcome):
+    assert outcome["result"]["warnings"] == []
+    assert len(markers(call, "flash")) == 1
+
+
+@then("lines printed by the new firmware appear after the boundary")
+def new_firmware_after_boundary(call, replugged):
+    boundary = markers(call, "flash")[0]["cursor"]
+    replugged.print("*** Booting Zephyr OS build v4.4.0 ***\r\n")
+    captured(call, boundary + 1)
+    after = call("serial_read", cursor=boundary)["lines"]
+    assert [(e["kind"], e["event"]) for e in after] == [("rx", "boot")]
 
 
 @then(parsers.parse('the buffer contains a "{kind}" marker'))

@@ -3,13 +3,16 @@ them as west extensions.
 
 `build` records its arguments in <topdir>/fake-build/calls.jsonl, prints fake-build/output.log,
 then fake-build/stderr.log to stderr if present, and exits with the code in fake-build/exit_code.
-`flash` does the same with flash-calls.jsonl, flash-output.log and flash-exit_code.
+`flash` does the same with flash-calls.jsonl, flash-output.log and flash-exit_code. With
+fake-build/flash-port.json it first checks the board's port is free and re-enumerates it.
 """
 
 import json
 import sys
+import time
 from pathlib import Path
 
+import serial
 from west.commands import WestCommand
 
 
@@ -42,6 +45,22 @@ class Build(WestCommand):
         sys.exit(int((fake / "exit_code").read_text()))
 
 
+def _port_free(port: dict) -> bool:
+    """Whether the board's port can be opened, as a flash tool would. Then re-enumerate it:
+    remove the port's link and, after a while, point it at another device, or at none."""
+    try:
+        serial.Serial(port["link"], exclusive=True).close()
+        free = True
+    except serial.SerialException:
+        free = False
+    link = Path(port["link"])
+    link.unlink()
+    if port["device"] is not None:
+        time.sleep(port["delay"])
+        link.symlink_to(port["device"])
+    return free
+
+
 class Flash(WestCommand):
     def __init__(self):
         super().__init__("flash", "fake west flash", "Replay a canned flash log.")
@@ -56,6 +75,9 @@ class Flash(WestCommand):
     def do_run(self, args, unknown):
         fake = Path(self.topdir) / "fake-build"
         call = {key: getattr(args, key) for key in ("build_dir", "runner", "no_rebuild")}
+        hook = fake / "flash-port.json"
+        if hook.exists():
+            call["port_free"] = _port_free(json.loads(hook.read_text()))
         with (fake / "flash-calls.jsonl").open("a") as calls:
             calls.write(json.dumps({**call, "verbosity": int(self.verbosity)}) + "\n")
         sys.stdout.buffer.write((fake / "flash-output.log").read_bytes())
