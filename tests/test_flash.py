@@ -5,7 +5,16 @@ import time
 import pytest
 from west.commands import Verbosity
 
-from tests.workspaces import build_output, fake_west_build, flash_calls, flash_output, t3
+from tests.serial_device import Device, captured
+from tests.workspaces import (
+    build_output,
+    fake_west_build,
+    flash_calls,
+    flash_output,
+    flash_port,
+    t3,
+)
+from zquire.core import serial
 from zquire.core.context import Context
 from zquire.core.flash import EXCERPT_LINES
 from zquire.core.workspace import locate
@@ -266,3 +275,100 @@ def test_runners_yaml_without_a_flash_runner(root):
     runners = root / "app" / "build" / "one" / "zephyr" / "runners.yaml"
     runners.write_text("runners:\n- qemu\n")
     assert call(root, "flash")["status"] == "success"
+
+
+@pytest.fixture
+def console(root, tmp_path, device):
+    """A capture open on the board's console, a link to the device as USB names are."""
+    link = tmp_path / "console"
+    link.symlink_to(device.port)
+    call(root, "serial_open", port=str(link))
+    yield link
+    call(root, "serial_close")
+
+
+def entries(root, cursor=0):
+    return [(e["kind"], e["text"]) for e in call(root, "serial_read", cursor=cursor)["lines"]]
+
+
+def test_flash_releases_the_capture_port(root, console, device):
+    device.print("old firmware\n")
+    captured(lambda tool, **a: call(root, tool, **a), 1)
+    flash_port(root, console, device.port, delay=0)
+    result = call(root, "flash")
+    assert (result["status"], result["warnings"]) == ("success", [])
+    assert flash_calls(root)[0]["port_free"] is True
+    assert entries(root) == [("rx", "old firmware"), ("flash", "Port released for flashing.")]
+    device.print("new firmware\n")
+    captured(lambda tool, **a: call(root, tool, **a), 3)
+    assert entries(root, cursor=2) == [("rx", "new firmware")]
+
+
+def test_flash_waits_for_the_console_to_re_enumerate(root, console, device):
+    again = Device()
+    try:
+        flash_port(root, console, again.port, delay=1)
+        assert call(root, "flash")["warnings"] == []
+        again.print("*** Booting Zephyr OS build v4.4.0 ***\n")
+        captured(lambda tool, **a: call(root, tool, **a), 2)
+        assert entries(root) == [
+            ("flash", "Port released for flashing."),
+            ("rx", "*** Booting Zephyr OS build v4.4.0 ***"),
+        ]
+    finally:
+        again.close()
+
+
+def test_console_that_does_not_come_back(root, console, monkeypatch):
+    monkeypatch.setattr(serial, "RESUME_TIMEOUT_S", 0.3)
+    flash_port(root, console, None)
+    started = time.monotonic()
+    result = call(root, "flash")
+    assert time.monotonic() - started < 5
+    assert result["status"] == "success"
+    assert result["warnings"] == [
+        {
+            "code": "serial_not_reopened",
+            "message": "The serial capture could not reopen its port within 0.3 s of "
+            "flashing, and keeps trying.",
+        }
+    ]
+    assert entries(root) == [
+        ("flash", "Port released for flashing."),
+        ("disconnected", f"{console} did not come back within 0.3 s of flashing."),
+    ]
+
+
+def test_stale_warning_and_serial_warning_together(root, console, monkeypatch):
+    monkeypatch.setattr(serial, "RESUME_TIMEOUT_S", 0.1)
+    modify(root / "app" / "src" / "main.c")
+    flash_port(root, console, None)
+    codes = [w["code"] for w in call(root, "flash")["warnings"]]
+    assert codes == ["stale_build", "serial_not_reopened"]
+
+
+def test_failed_flash_reopens_the_port(root, console, device):
+    flash_output(root, "flash-openocd")
+    assert fails(root).code == "NO_DEVICE"
+    assert entries(root)[-1][0] == "flash"
+    assert call(root, "serial_write", text="help")["sent"] == "help\r\n"
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        lambda root: shutil.rmtree(root / "app" / "build" / "one"),
+        lambda root: default_runner(root, "qemu"),
+        lambda root: modify(root / "app" / "src" / "main.c"),
+    ],
+    ids=["no-build", "emulator", "stale"],
+)
+def test_refused_flash_keeps_the_port(root, console, refusal):
+    refusal(root)
+    fails(root, require_fresh=True)
+    assert entries(root) == []
+
+
+def test_release_and_resume_without_a_capture(root):
+    assert serial.release(locate(root)) is False
+    assert serial.resume(locate(root)) is True

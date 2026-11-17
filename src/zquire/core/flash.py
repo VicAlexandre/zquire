@@ -4,7 +4,7 @@ from pathlib import Path
 
 from zquire.adapters.store import prepare_state_dir
 from zquire.adapters.west import run_west
-from zquire.core import profiles, staleness
+from zquire.core import profiles, serial, staleness
 from zquire.core.context import Context
 from zquire.errors import ZquireError
 
@@ -94,8 +94,21 @@ def flash(
     if runner is not None:
         arguments += ["-r", runner]
     started = time.monotonic()
-    exit_code = run_west(workspace.root, arguments, log)
+    # The flash tool needs the port, and a USB console vanishes while the board resets.
+    released = serial.release(workspace)
+    try:
+        exit_code = run_west(workspace.root, arguments, log)
+    finally:
+        reopened = not released or serial.resume(workspace)
     duration = round(time.monotonic() - started, 3)
+    if not reopened:
+        warnings.append(
+            {
+                "code": "serial_not_reopened",
+                "message": f"The serial capture could not reopen its port within "
+                f"{serial.RESUME_TIMEOUT_S} s of flashing, and keeps trying.",
+            }
+        )
     lines = _COLOUR.sub("", log.read_text(errors="replace")).splitlines()
     if exit_code != 0:
         message = next((line.strip() for line in lines if _NO_DEVICE.search(line)), None)

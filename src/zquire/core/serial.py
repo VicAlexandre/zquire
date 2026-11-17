@@ -19,6 +19,8 @@ from zquire.errors import ZquireError
 DEFAULT_BAUD = 115200
 DEFAULT_LIMIT = 200
 DEFAULT_WAIT_S = 10
+# How long a device may take to come back after flashing, as USB consoles re-enumerate.
+RESUME_TIMEOUT_S = 10
 _REQUEST_TIMEOUT_S = 10
 _CLOSE_TIMEOUT_S = 5
 
@@ -221,3 +223,13 @@ def serial_close(context: Context) -> dict:
     while socket_path(workspace).exists() and time.monotonic() < deadline:
         time.sleep(0.02)
     return {"closed": True}
+
+
+def release(workspace: Workspace) -> bool:
+    return _reply(workspace, {"op": "release"}) is not None
+
+
+def resume(workspace: Workspace) -> bool:
+    reply = _reply(workspace, {"op": "resume", "timeout": RESUME_TIMEOUT_S}, RESUME_TIMEOUT_S)
+    # A capture closed during the flash has no port to reopen.
+    return reply is None or reply["result"]["reopened"]
