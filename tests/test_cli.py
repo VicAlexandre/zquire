@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from tests.conftest import NO_WORKSPACE, call_mcp
+from tests.conftest import NEEDS_ARGUMENTS, NO_WORKSPACE, call_mcp
 from tests.workspaces import t2
 from zquire import __version__, cli
 from zquire.mcp_server import build_server
@@ -69,7 +69,7 @@ def test_missing_required_option_is_invalid_argument(fake_tools, capsys):
 
 @pytest.mark.parametrize("name", TOOLS)
 def test_every_registered_tool_is_a_subcommand(name, capsys, ready_workspace):
-    if TOOLS[name].input_schema.get("required"):
+    if TOOLS[name].input_schema.get("required") or name in NEEDS_ARGUMENTS:
         pytest.skip("needs arguments")
     assert cli.main(["--workspace", str(ready_workspace), name]) == 0
     capsys.readouterr()

@@ -77,7 +77,8 @@ LOGS = Path(__file__).with_name("logs")
 
 
 def fake_west_build(root: Path) -> Path:
-    """Give the workspace a `west build` and `west flash` that replay logs instead."""
+    """Give the workspace a `west build`, `west flash` and `west twister` that replay logs
+    instead."""
     config = configparser.ConfigParser()
     config.read(root / ".west" / "config")
     repository = root / config["manifest"]["path"]
@@ -92,12 +93,15 @@ def fake_west_build(root: Path) -> Path:
         "        class: Build\n"
         "      - name: flash\n"
         "        class: Flash\n"
+        "      - name: twister\n"
+        "        class: Twister\n"
     )
     with (repository / config["manifest"]["file"]).open("a") as manifest_file:
         manifest_file.write("    west-commands: zquire-fake-build/west-commands.yml\n")
     (root / "fake-build").mkdir()
     build_output(root, "success")
     flash_output(root, "flash-success")
+    twister_report(root, [])
     return root
 
 
@@ -129,6 +133,51 @@ def flash_port(root: Path, link: Path, device: str | None, delay: float = 0.3) -
     device after delay seconds, or remove it for good when device is None."""
     hook = {"link": str(link), "device": device, "delay": delay}
     (root / "fake-build" / "flash-port.json").write_text(json.dumps(hook))
+
+
+def twister_suite(name: str, status: str, cases=(), **fields) -> dict:
+    """A test suite as Twister's twister.json reports it, with cases as (identifier, status)."""
+    testcases = [
+        {"identifier": identifier, "execution_time": "0.00", "status": case_status}
+        for identifier, case_status in cases
+    ]
+    suite = {
+        "name": name,
+        "arch": "posix",
+        "platform": "native_sim",
+        "path": name.rsplit(".", 1)[0].replace(".", "/"),
+        "runnable": True,
+        "retries": 0,
+        "status": status,
+        "execution_time": "0.10",
+        "build_time": "1.00",
+        "testcases": testcases,
+    }
+    return {**suite, **fields}
+
+
+def twister_report(
+    root: Path, suites: list[dict] | None, output: str = "", exit_code: int | None = None
+) -> None:
+    """Make the next fake Twister run print output, write a report of suites unless None, and
+    exit with exit_code, by default 1 when a suite failed."""
+    fake = root / "fake-build"
+    report = fake / "twister.json"
+    if suites is None:
+        report.unlink(missing_ok=True)
+    else:
+        environment = {"os": "Linux", "zephyr_version": "v4.4.0", "toolchain": "zephyr"}
+        text = json.dumps({"environment": environment, "testsuites": suites}, indent=4)
+        report.write_text(re.sub(r"/ws\b", str(root), text))
+    (fake / "twister-output.log").write_text(output)
+    if exit_code is None:
+        exit_code = int(any(s["status"] in ("failed", "error") for s in suites or []))
+    (fake / "twister-exit_code").write_text(str(exit_code))
+
+
+def twister_calls(root: Path) -> list[dict]:
+    calls = root / "fake-build" / "twister-calls.jsonl"
+    return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
 
 
 def flash_calls(root: Path) -> list[dict]:

@@ -4,7 +4,7 @@ import jsonschema
 import pytest
 from mcp import MCPError, types
 
-from tests.conftest import NO_WORKSPACE, call_mcp, list_mcp
+from tests.conftest import NEEDS_ARGUMENTS, NO_WORKSPACE, call_mcp, list_mcp
 from tests.workspaces import t2
 from zquire.core.context import Context
 from zquire.core.workspace import locate
@@ -23,7 +23,7 @@ def test_every_registered_tool_is_listed_with_its_schemas():
 
 @pytest.mark.parametrize("name", TOOLS)
 def test_registered_tools_without_required_arguments_succeed(name, ready_workspace):
-    if TOOLS[name].input_schema.get("required"):
+    if TOOLS[name].input_schema.get("required") or name in NEEDS_ARGUMENTS:
         pytest.skip("needs arguments")
     result = call_mcp(build_server(Context(locate(ready_workspace))), name)
     assert not result.is_error
