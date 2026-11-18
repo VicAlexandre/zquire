@@ -25,3 +25,16 @@ Feature: Twister results
     When the agent calls "twister" for a suite
     Then the result contains the path to Twister's output directory
     And the result contains the path to its JSON report, and that file exists
+
+  @TWS-06
+  Scenario: Hardware test with capture open
+    Given a serial capture is open on the board
+    When the agent calls "twister" with device testing
+    Then zquire releases the port during the run
+    And capture resumes after the run
+
+  @TWS-07
+  Scenario: Run exceeds timeout
+    Given a suite that hangs
+    When the agent calls "twister" with timeout 60 s
+    Then the status is "timeout" after about 60 s

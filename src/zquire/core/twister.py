@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import time
 from pathlib import Path
@@ -6,13 +7,13 @@ from pathlib import Path
 from zquire.adapters import serial_port
 from zquire.adapters.store import prepare_state_dir
 from zquire.adapters.west import run_west
-from zquire.core import profiles
+from zquire.core import profiles, serial
 from zquire.core.context import Context
 from zquire.core.diagnostics import diagnostics
-from zquire.core.serial import pick_port
 from zquire.core.workspace import Workspace
 from zquire.errors import ZquireError
 
+DEFAULT_TIMEOUT_S = 30 * 60
 EXCERPT_LINES = 40
 LOG_LINES = 30
 _COUNTED = {
@@ -23,6 +24,8 @@ _COUNTED = {
     "not run": "built_only",
 }
 _FAILED = ("failed", "error")
+# By west's exit code, which is None when the run was stopped at its timeout.
+_STATUSES = {0: "success", None: "timeout"}
 # The reasons Twister gives a suite whose build failed, before any detail it appends.
 _BUILD_FAILURES = ("Build failure", "CMake build failure")
 
@@ -99,6 +102,7 @@ def twister(
     platform: str | None = None,
     device_testing: bool = False,
     device_serial: str | None = None,
+    timeout_s: float = DEFAULT_TIMEOUT_S,
 ) -> dict:
     workspace = context.workspace
     paths, scenarios = paths or [], scenarios or []
@@ -125,17 +129,28 @@ def twister(
         arguments += ["-T", str(workspace.resolve(path))]
     for scenario in scenarios:
         arguments += ["-s", scenario]
+    released = False
     if device_testing:
+        captured = serial.capture_port(workspace)
         if device_serial is None:
-            device_serial = pick_port(serial_port.usb_ports())
+            device_serial = captured or serial.pick_port(serial_port.usb_ports())
         arguments += ["--device-testing", "--device-serial", device_serial]
+        # Twister opens the board's console itself, and the capture holds it exclusively.
+        released = (
+            captured is not None
+            and os.path.realpath(captured) == os.path.realpath(device_serial)
+            and serial.release(workspace)
+        )
     started = time.monotonic()
-    exit_code = run_west(workspace.root, arguments, log)
+    try:
+        exit_code = run_west(workspace.root, arguments, log, timeout_s)
+    finally:
+        reopened = not released or serial.resume(workspace)
     duration = round(time.monotonic() - started, 3)
     report_path = outdir / "twister.json"
     report = _read_report(report_path)
     result = {
-        "status": "success" if exit_code == 0 else "failure",
+        "status": _STATUSES.get(exit_code, "failure"),
         "platform": chosen,
         "duration_s": duration,
         **_results(report or {}, workspace),
@@ -143,7 +158,16 @@ def twister(
         "report_path": workspace.relative(report_path) if report is not None else None,
         "log_path": workspace.relative(log),
         "log_excerpt": None,
+        "warnings": [],
     }
+    if not reopened:
+        result["warnings"].append(
+            {
+                "code": "serial_not_reopened",
+                "message": f"The serial capture could not reopen its port within "
+                f"{serial.RESUME_TIMEOUT_S} s of device testing, and keeps trying.",
+            }
+        )
     if report is None:
         lines = log.read_text(errors="replace").splitlines()
         result["log_excerpt"] = "\n".join(lines[-LOG_LINES:])
