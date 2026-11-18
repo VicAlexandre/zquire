@@ -86,6 +86,8 @@ FAKE_TOOLS = {
 
 
 NO_WORKSPACE = Context(None)
+# Tools that need one of several optional arguments, which their schema cannot require.
+NEEDS_ARGUMENTS = {"twister"}
 
 
 @pytest.fixture(autouse=True)

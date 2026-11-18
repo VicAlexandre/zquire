@@ -5,6 +5,8 @@ them as west extensions.
 then fake-build/stderr.log to stderr if present, and exits with the code in fake-build/exit_code.
 `flash` does the same with flash-calls.jsonl, flash-output.log and flash-exit_code. With
 fake-build/flash-port.json it first checks the board's port is free and re-enumerates it.
+`twister` records its arguments in twister-calls.jsonl, prints twister-output.log, writes
+twister.json into its output directory if present, and exits with twister-exit_code.
 """
 
 import json
@@ -82,3 +84,32 @@ class Flash(WestCommand):
             calls.write(json.dumps({**call, "verbosity": int(self.verbosity)}) + "\n")
         sys.stdout.buffer.write((fake / "flash-output.log").read_bytes())
         sys.exit(int((fake / "flash-exit_code").read_text()))
+
+
+class Twister(WestCommand):
+    def __init__(self):
+        super().__init__("twister", "fake west twister", "Replay a canned Twister report.")
+
+    def do_add_parser(self, parser_adder):
+        parser = parser_adder.add_parser(self.name)
+        parser.add_argument("-p", dest="platform")
+        parser.add_argument("-O", dest="outdir")
+        parser.add_argument("-T", dest="testsuite_roots", action="append", default=[])
+        parser.add_argument("-s", dest="scenarios", action="append", default=[])
+        parser.add_argument("--device-testing", action="store_true")
+        parser.add_argument("--device-serial")
+        return parser
+
+    def do_run(self, args, unknown):
+        fake = Path(self.topdir) / "fake-build"
+        keys = ("platform", "outdir", "testsuite_roots", "scenarios", "device_testing")
+        call = {key: getattr(args, key) for key in (*keys, "device_serial")}
+        with (fake / "twister-calls.jsonl").open("a") as calls:
+            calls.write(json.dumps(call) + "\n")
+        sys.stdout.buffer.write((fake / "twister-output.log").read_bytes())
+        report = fake / "twister.json"
+        if report.exists():
+            outdir = Path(args.outdir)
+            outdir.mkdir(parents=True, exist_ok=True)
+            (outdir / "twister.json").write_bytes(report.read_bytes())
+        sys.exit(int((fake / "twister-exit_code").read_text()))

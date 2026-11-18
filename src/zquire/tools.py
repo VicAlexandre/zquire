@@ -21,6 +21,9 @@ from zquire.core.serial import (
 )
 from zquire.core.serial_buffer import DEFAULT_CAPACITY
 from zquire.core.status import status
+from zquire.core.twister import EXCERPT_LINES as TWISTER_EXCERPT_LINES
+from zquire.core.twister import LOG_LINES as TWISTER_LOG_LINES
+from zquire.core.twister import twister
 from zquire.errors import ZquireError
 
 
@@ -467,6 +470,103 @@ TOOLS = {
                 }
             ),
             handler=flash,
+        ),
+        Tool(
+            name="twister",
+            description=(
+                "Run Twister on test paths or scenario names for the active profile's board or a "
+                "given platform, optionally on attached hardware. Returns suite counts, failed "
+                "cases with log excerpts, and build failures as build diagnostics."
+            ),
+            input_schema=_input(
+                {
+                    "paths": {
+                        **_STRINGS,
+                        "minItems": 1,
+                        "description": "Test directories, relative to the workspace root.",
+                    },
+                    "scenarios": {
+                        **_STRINGS,
+                        "minItems": 1,
+                        "description": "Scenario names, as in testcase.yaml.",
+                    },
+                    "platform": {
+                        "type": "string",
+                        "description": "Defaults to the active profile's board.",
+                    },
+                    "device_testing": {
+                        "type": "boolean",
+                        "description": "Flash and run the tests on an attached board.",
+                    },
+                    "device_serial": {
+                        "type": "string",
+                        "description": "The board's console port. Defaults to the only USB serial "
+                        "port.",
+                    },
+                },
+                [],
+            ),
+            output_schema=_output(
+                {
+                    "status": {"enum": ["success", "failure"]},
+                    "platform": {"type": "string"},
+                    "duration_s": {"type": "number"},
+                    "counts": {
+                        "type": "object",
+                        "description": "Test suites by result. Filtered suites are not counted.",
+                        "properties": {
+                            key: {"type": "integer"}
+                            for key in ("passed", "failed", "error", "skipped", "built_only")
+                        },
+                        "required": ["passed", "failed", "error", "skipped", "built_only"],
+                    },
+                    "failures": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "suite": {"type": "string"},
+                                "case": {
+                                    **_STRING_OR_NULL,
+                                    "description": "Null when the suite failed outside any case.",
+                                },
+                                "status": {"enum": ["failed", "error"]},
+                                "reason": _STRING_OR_NULL,
+                                "log_excerpt": {
+                                    "type": "string",
+                                    "description": f"At most {TWISTER_EXCERPT_LINES} lines, "
+                                    "ending at the failure.",
+                                },
+                            },
+                            "required": ["suite", "case", "status", "reason", "log_excerpt"],
+                        },
+                    },
+                    "build_failures": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "suite": {"type": "string"},
+                                "reason": {"type": "string"},
+                                "diagnostics": {"type": "array", "items": _DIAGNOSTIC},
+                            },
+                            "required": ["suite", "reason", "diagnostics"],
+                        },
+                    },
+                    "output_dir": {"type": "string"},
+                    "report_path": {
+                        **_STRING_OR_NULL,
+                        "description": "Twister's JSON report. Null when it wrote none.",
+                    },
+                    "log_path": {"type": "string"},
+                    "log_excerpt": {
+                        **_STRING_OR_NULL,
+                        "description": f"The log's last {TWISTER_LOG_LINES} lines, when Twister "
+                        "wrote no report.",
+                    },
+                }
+            ),
+            handler=twister,
         ),
         Tool(
             name="kconfig_symbol",
