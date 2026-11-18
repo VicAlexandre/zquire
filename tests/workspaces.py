@@ -187,6 +187,86 @@ def twister_port(root: Path, link: Path, device: str | None, delay: float = 0.3)
     (root / "fake-build" / "twister-port.json").write_text(json.dumps(hook))
 
 
+def fake_zview(root: Path) -> Path:
+    """Give the workspace a `west zview` that replays a dump instead, as installing ZView
+    would."""
+    config = configparser.ConfigParser()
+    config.read(root / ".west" / "config")
+    commands = root / config["manifest"]["path"] / "zquire-fake-build" / "west-commands.yml"
+    with commands.open("a") as west_commands:
+        west_commands.write("      - name: zview\n        class: Zview\n")
+    zview_dump(root, [], [])
+    return root
+
+
+def zview_thread(name, stack_size=1024, used=256, cpu=None, priority=0, state=0, idle=False):
+    """A thread as ZView's dump --json writes it."""
+    runtime = {
+        "cpu": cpu,
+        "cpu_normalized": cpu,
+        "is_active": bool(cpu),
+        "stack_watermark": used,
+        "stack_watermark_percent": None if used is None else used / stack_size * 100,
+        "is_cpu_coherent": None,
+    }
+    return {
+        "address": 0x20000000 + len(name) * 0x100,
+        "stack_start": 0x20001000,
+        "stack_size": stack_size,
+        "name": name,
+        "runtime": runtime,
+        "priority": priority,
+        "state": state,
+        "user_options": 0,
+        "entry_point": 0x1235,
+        "entry_symbol": f"{name}_entry",
+        "entry_site": None,
+        "is_idle": idle,
+        "line": f"thread {name:30s} stack={stack_size:>6}  watermark={used}",
+    }
+
+
+def zview_heap(name, size=4096, used=1024, max_used=2048):
+    """A heap as ZView's dump --json writes it."""
+    return {
+        "name": name,
+        "address": 0x20004000,
+        "free_bytes": size - used,
+        "allocated_bytes": used,
+        "max_allocated_bytes": max_used,
+        "usage_percent": used / size * 100,
+        "chunks": None,
+        "waiters": [],
+        "decl_site": None,
+        "line": f"heap {name:20s} free={size - used} alloc={used} max={max_used} waiters=-",
+        "glance": {"fill": used / size * 100, "text": f"{used}/{size}B", "level": "normal"},
+    }
+
+
+def zview_dump(
+    root: Path, threads: list, heaps: list, stderr: str = "", exit_code: int = 0
+) -> None:
+    """Make the next fake ZView dump print a frame of threads and heaps, and stderr."""
+    fake = root / "fake-build"
+    frame = {"threads": threads, "heaps": heaps, "semaphores": [], "mutexes": []}
+    (fake / "zview.json").write_text(json.dumps(frame) + "\n")
+    (fake / "zview-stderr.log").write_text(stderr)
+    (fake / "zview-exit_code").write_text(str(exit_code))
+
+
+def zview_calls(root: Path) -> list[dict]:
+    calls = root / "fake-build" / "zview-calls.jsonl"
+    return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
+
+
+def zview_build(root: Path, build_dir: Path, config: str, runners: str | None = None) -> None:
+    """Give a build directory the .config and runners.yaml ZView reads."""
+    (build_dir / "zephyr").mkdir(parents=True, exist_ok=True)
+    (build_dir / "zephyr" / ".config").write_text(config)
+    if runners is not None:
+        (build_dir / "zephyr" / "runners.yaml").write_text(runners)
+
+
 def twister_calls(root: Path) -> list[dict]:
     calls = root / "fake-build" / "twister-calls.jsonl"
     return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []

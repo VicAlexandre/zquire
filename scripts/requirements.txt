@@ -4,3 +4,4 @@ pyserial>=3.5
 west>=1.2
 tomli>=1.1; python_version < "3.11"
 tomli-w>=1.0
+pyyaml>=6.0

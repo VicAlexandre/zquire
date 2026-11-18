@@ -10,6 +10,9 @@ twister.json into its output directory if present, and exits with twister-exit_c
 twister-port.json it first checks the board's port is free and re-enumerates it. With
 twister-hang it starts a child process and hangs: until interrupted when the file holds
 "interrupt", then writing its report as Twister does, or until killed when it holds "ignore".
+`zview`, which fixtures add with fake_zview, records its arguments in zview-calls.jsonl, waits
+zview-delay seconds if present, prints zview-stderr.log to stderr and zview.json to stdout,
+and exits with zview-exit_code.
 """
 
 import json
@@ -139,3 +142,32 @@ class Twister(WestCommand):
         signal.signal(signal.SIGINT, interrupted if mode == "interrupt" else signal.SIG_IGN)
         while True:
             time.sleep(0.1)
+
+
+class Zview(WestCommand):
+    def __init__(self):
+        super().__init__("zview", "fake west zview", "Replay a canned ZView dump.")
+
+    def do_add_parser(self, parser_adder):
+        parser = parser_adder.add_parser(self.name)
+        parser.add_argument("cmd")
+        parser.add_argument("--json", action="store_true")
+        parser.add_argument("-d", dest="build_dir")
+        parser.add_argument("-r", dest="runner")
+        parser.add_argument("-t", dest="runner_target")
+        return parser
+
+    def do_run(self, args, unknown):
+        fake = Path(self.topdir) / "fake-build"
+        keys = ("cmd", "json", "build_dir", "runner", "runner_target")
+        with (fake / "zview-calls.jsonl").open("a") as calls:
+            calls.write(json.dumps({key: getattr(args, key) for key in keys}) + "\n")
+        delay = fake / "zview-delay"
+        if delay.exists():
+            time.sleep(float(delay.read_text()))
+        stderr = fake / "zview-stderr.log"
+        if stderr.exists():
+            sys.stderr.write(stderr.read_text())
+            sys.stderr.flush()
+        sys.stdout.write((fake / "zview.json").read_text())
+        sys.exit(int((fake / "zview-exit_code").read_text()))

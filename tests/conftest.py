@@ -4,8 +4,9 @@ import pytest
 from mcp import Client, MCPError
 
 from tests.serial_device import Device
-from tests.workspaces import fake_west_build, t2
+from tests.workspaces import fake_west_build, fake_zview, t2, zview_build
 from zquire.core.context import Context
+from zquire.core.runtime_stats import REQUIRED
 from zquire.core.workspace import locate
 from zquire.errors import ZquireError
 from zquire.tools import TOOLS, Tool, invoke
@@ -110,11 +111,12 @@ def device():
 
 @pytest.fixture
 def ready_workspace(tmp_path, device, request, monkeypatch):
-    """A T2 workspace with an active profile that the fake `west build` can build, and a
-    serial capture open on a pseudo-terminal."""
-    root = fake_west_build(t2(tmp_path / "ws"))
+    """A T2 workspace with an active profile that the fake `west build` can build and the
+    fake ZView can read, and a serial capture open on a pseudo-terminal."""
+    root = fake_zview(fake_west_build(t2(tmp_path / "ws")))
     context = Context(locate(root))
-    invoke(TOOLS["build"], {"application": "application", "board": "b"}, context)
+    result = invoke(TOOLS["build"], {"application": "application", "board": "b"}, context)
+    zview_build(root, root / result["build_dir"], "".join(f"{o}=y\n" for o in REQUIRED))
     with monkeypatch.context() as directory:
         # The capture process inherits it, and under mutmut needs it to find mutmut's config.
         directory.chdir(request.config.invocation_params.dir)
