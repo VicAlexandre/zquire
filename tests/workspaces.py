@@ -175,6 +175,18 @@ def twister_report(
     (fake / "twister-exit_code").write_text(str(exit_code))
 
 
+def twister_hang(root: Path, mode: str) -> None:
+    """Make the next fake Twister run hang until interrupted, or until killed when mode is
+    "ignore"."""
+    (root / "fake-build" / "twister-hang").write_text(mode)
+
+
+def twister_port(root: Path, link: Path, device: str | None, delay: float = 0.3) -> None:
+    """As flash_port, for the next fake Twister run."""
+    hook = {"link": str(link), "device": device, "delay": delay}
+    (root / "fake-build" / "twister-port.json").write_text(json.dumps(hook))
+
+
 def twister_calls(root: Path) -> list[dict]:
     calls = root / "fake-build" / "twister-calls.jsonl"
     return [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []

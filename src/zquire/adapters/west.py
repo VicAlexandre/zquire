@@ -1,4 +1,5 @@
 import os
+import signal
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -56,11 +57,18 @@ def config_value(topdir: Path, option: str) -> tuple[str, str] | None:
     return None
 
 
-def run_west(topdir: Path, arguments: list[str], log: Path) -> int:
-    """Run west with output and errors interleaved into log, and return its exit code."""
+# How long west has to stop after an interrupt, as Twister writes its reports.
+INTERRUPT_GRACE_S = 30
+
+
+def run_west(
+    topdir: Path, arguments: list[str], log: Path, timeout_s: float | None = None
+) -> int | None:
+    """Run west with output and errors interleaved into log, and return its exit code, or None
+    when it was stopped after timeout_s."""
     log.parent.mkdir(exist_ok=True)
     with log.open("w") as output:
-        return subprocess.run(
+        process = subprocess.Popen(
             [sys.executable, "-m", "west", *arguments],
             cwd=topdir,
             # Under `zquire serve` stdin carries the MCP stream, which west must not read.
@@ -69,5 +77,21 @@ def run_west(topdir: Path, arguments: list[str], log: Path) -> int:
             stderr=subprocess.STDOUT,
             # Unbuffered, so west's own messages stay in order with the tools it runs.
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
-            check=False,
-        ).returncode
+            # Its own process group, so stopping it reaches the processes it started.
+            start_new_session=timeout_s is not None,
+        )
+        try:
+            return process.wait(timeout_s)
+        except subprocess.TimeoutExpired:
+            _stop(process)
+            return None
+
+
+def _stop(process: subprocess.Popen) -> None:
+    # An interrupt, as from Ctrl-C, lets Twister write its reports for what has finished.
+    os.killpg(process.pid, signal.SIGINT)
+    try:
+        process.wait(INTERRUPT_GRACE_S)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait()

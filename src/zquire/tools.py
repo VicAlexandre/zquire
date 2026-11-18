@@ -21,6 +21,7 @@ from zquire.core.serial import (
 )
 from zquire.core.serial_buffer import DEFAULT_CAPACITY
 from zquire.core.status import status
+from zquire.core.twister import DEFAULT_TIMEOUT_S as TWISTER_TIMEOUT_S
 from zquire.core.twister import EXCERPT_LINES as TWISTER_EXCERPT_LINES
 from zquire.core.twister import LOG_LINES as TWISTER_LOG_LINES
 from zquire.core.twister import twister
@@ -200,6 +201,15 @@ def _input(properties: dict, required: list[str]) -> dict:
 def _output(properties: dict) -> dict:
     return {"type": "object", "properties": properties, "required": list(properties)}
 
+
+_WARNINGS = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {"code": {"type": "string"}, "message": {"type": "string"}},
+        "required": ["code", "message"],
+    },
+}
 
 _SERIAL_ENTRY = {
     "type": "object",
@@ -456,17 +466,7 @@ TOOLS = {
                         "type": "string",
                         "description": f"The log's last {EXCERPT_LINES} lines.",
                     },
-                    "warnings": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "code": {"type": "string"},
-                                "message": {"type": "string"},
-                            },
-                            "required": ["code", "message"],
-                        },
-                    },
+                    "warnings": _WARNINGS,
                 }
             ),
             handler=flash,
@@ -500,15 +500,22 @@ TOOLS = {
                     },
                     "device_serial": {
                         "type": "string",
-                        "description": "The board's console port. Defaults to the only USB serial "
-                        "port.",
+                        "description": "The board's console port. Defaults to the serial "
+                        "capture's port, else the only USB serial port. A capture on it is "
+                        "paused during the run.",
+                    },
+                    "timeout_s": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": f"Stop Twister after this long and return what finished. "
+                        f"Default {TWISTER_TIMEOUT_S}.",
                     },
                 },
                 [],
             ),
             output_schema=_output(
                 {
-                    "status": {"enum": ["success", "failure"]},
+                    "status": {"enum": ["success", "failure", "timeout"]},
                     "platform": {"type": "string"},
                     "duration_s": {"type": "number"},
                     "counts": {
@@ -564,6 +571,7 @@ TOOLS = {
                         "description": f"The log's last {TWISTER_LOG_LINES} lines, when Twister "
                         "wrote no report.",
                     },
+                    "warnings": _WARNINGS,
                 }
             ),
             handler=twister,

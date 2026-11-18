@@ -225,6 +225,11 @@ def serial_close(context: Context) -> dict:
     return {"closed": True}
 
 
+def capture_port(workspace: Workspace) -> str | None:
+    reply = _reply(workspace, {"op": "info"})
+    return reply["result"]["port"] if reply is not None else None
+
+
 def release(workspace: Workspace) -> bool:
     return _reply(workspace, {"op": "release"}) is not None
 

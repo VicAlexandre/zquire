@@ -6,10 +6,15 @@ then fake-build/stderr.log to stderr if present, and exits with the code in fake
 `flash` does the same with flash-calls.jsonl, flash-output.log and flash-exit_code. With
 fake-build/flash-port.json it first checks the board's port is free and re-enumerates it.
 `twister` records its arguments in twister-calls.jsonl, prints twister-output.log, writes
-twister.json into its output directory if present, and exits with twister-exit_code.
+twister.json into its output directory if present, and exits with twister-exit_code. With
+twister-port.json it first checks the board's port is free and re-enumerates it. With
+twister-hang it starts a child process and hangs: until interrupted when the file holds
+"interrupt", then writing its report as Twister does, or until killed when it holds "ignore".
 """
 
 import json
+import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -104,12 +109,33 @@ class Twister(WestCommand):
         fake = Path(self.topdir) / "fake-build"
         keys = ("platform", "outdir", "testsuite_roots", "scenarios", "device_testing")
         call = {key: getattr(args, key) for key in (*keys, "device_serial")}
+        hook = fake / "twister-port.json"
+        if hook.exists():
+            call["port_free"] = _port_free(json.loads(hook.read_text()))
         with (fake / "twister-calls.jsonl").open("a") as calls:
             calls.write(json.dumps(call) + "\n")
         sys.stdout.buffer.write((fake / "twister-output.log").read_bytes())
+        sys.stdout.flush()
+        hang = fake / "twister-hang"
+        if hang.exists():
+            self._hang(fake, args.outdir, hang.read_text())
+        self._report(fake, args.outdir)
+        sys.exit(int((fake / "twister-exit_code").read_text()))
+
+    def _report(self, fake, outdir):
         report = fake / "twister.json"
         if report.exists():
-            outdir = Path(args.outdir)
-            outdir.mkdir(parents=True, exist_ok=True)
-            (outdir / "twister.json").write_bytes(report.read_bytes())
-        sys.exit(int((fake / "twister-exit_code").read_text()))
+            Path(outdir).mkdir(parents=True, exist_ok=True)
+            (Path(outdir) / "twister.json").write_bytes(report.read_bytes())
+
+    def _hang(self, fake, outdir, mode):
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
+        (fake / "twister-child.pid").write_text(str(child.pid))
+
+        def interrupted(signum, frame):
+            self._report(fake, outdir)
+            sys.exit(1)
+
+        signal.signal(signal.SIGINT, interrupted if mode == "interrupt" else signal.SIG_IGN)
+        while True:
+            time.sleep(0.1)
