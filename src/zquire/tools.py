@@ -8,6 +8,7 @@ from zquire.core.build import LOG_LINES, build, build_log
 from zquire.core.context import Context
 from zquire.core.flash import EXCERPT_LINES, flash
 from zquire.core.queries import devicetree_node, kconfig_symbol
+from zquire.core.runtime_stats import STACK_RISK_PERCENT, runtime_stats
 from zquire.core.serial import (
     DEFAULT_BAUD,
     DEFAULT_LIMIT,
@@ -55,6 +56,8 @@ def invoke(tool: Tool, arguments: dict, context: Context) -> dict:
 
 
 _STRING_OR_NULL = {"type": ["string", "null"]}
+_INTEGER_OR_NULL = {"type": ["integer", "null"]}
+_NUMBER_OR_NULL = {"type": ["number", "null"]}
 
 _STATUS_OUTPUT = {
     "type": "object",
@@ -575,6 +578,104 @@ TOOLS = {
                 }
             ),
             handler=twister,
+        ),
+        Tool(
+            name="runtime_stats",
+            description=(
+                "Read the running board's threads and heaps once with ZView, through its debug "
+                "probe, for the active or named profile's build. Flags threads whose stack "
+                "watermark reaches the stack risk threshold."
+            ),
+            input_schema=_input(
+                {
+                    "profile": {"type": "string"},
+                    "runner": {
+                        "type": "string",
+                        "description": "ZView's runner: jlink, pyocd, nrfutil or gdb. Defaults "
+                        "to the board's flash runner.",
+                    },
+                    "runner_target": {
+                        "type": "string",
+                        "description": "The MCU as the runner names it. Defaults to the one the "
+                        "board passes the runner.",
+                    },
+                    "stack_risk_percent": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": f"Default {STACK_RISK_PERCENT}.",
+                    },
+                },
+                [],
+            ),
+            output_schema=_output(
+                {
+                    "profile": {"type": "string"},
+                    "runner": _STRING_OR_NULL,
+                    "runner_target": _STRING_OR_NULL,
+                    "threads": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "priority": _INTEGER_OR_NULL,
+                                "state": {
+                                    "enum": [
+                                        "ready",
+                                        "pending",
+                                        "sleeping",
+                                        "suspending",
+                                        "suspended",
+                                        "aborting",
+                                        "dead",
+                                        None,
+                                    ]
+                                },
+                                "stack_size": _INTEGER_OR_NULL,
+                                "stack_used": {
+                                    **_INTEGER_OR_NULL,
+                                    "description": "The most bytes of its stack ever used.",
+                                },
+                                "watermark_percent": _NUMBER_OR_NULL,
+                                "cpu_percent": {
+                                    **_NUMBER_OR_NULL,
+                                    "description": "Its share of all CPU time, idle included. "
+                                    "Null without CONFIG_THREAD_RUNTIME_STATS.",
+                                },
+                                "flags": {"type": "array", "items": {"enum": ["stack_risk"]}},
+                            },
+                            "required": [
+                                "name",
+                                "priority",
+                                "state",
+                                "stack_size",
+                                "stack_used",
+                                "watermark_percent",
+                                "cpu_percent",
+                                "flags",
+                            ],
+                        },
+                    },
+                    "heaps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "size": {"type": "integer"},
+                                "used": {"type": "integer"},
+                                "free": {"type": "integer"},
+                                "max_used": _INTEGER_OR_NULL,
+                            },
+                            "required": ["name", "size", "used", "free", "max_used"],
+                        },
+                    },
+                    "log_path": {"type": "string"},
+                    "warnings": _WARNINGS,
+                }
+            ),
+            handler=runtime_stats,
         ),
         Tool(
             name="kconfig_symbol",
