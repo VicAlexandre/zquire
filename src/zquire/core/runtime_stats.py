@@ -166,14 +166,37 @@ def _failure(output: str, log_path: str) -> ZquireError:
     )
 
 
+def _sections(include: str, threads: list[str] | None, heaps: list[str] | None) -> list[str]:
+    sections = ["threads", "heaps"] if include == "both" else [include]
+    for section, names in (("threads", threads), ("heaps", heaps)):
+        if names is not None and section not in sections:
+            raise ZquireError(
+                "INVALID_ARGUMENT",
+                f"{section} filters a section that include leaves out.",
+                f"Drop {section}, or include {section}.",
+            )
+    return sections
+
+
+def _select(rows: list[dict], names: list[str] | None) -> tuple[list[dict], list[str]]:
+    if names is None:
+        return rows, []
+    found = {row["name"] for row in rows}
+    return [row for row in rows if row["name"] in names], [n for n in names if n not in found]
+
+
 def runtime_stats(
     context: Context,
     profile: str | None = None,
     runner: str | None = None,
     runner_target: str | None = None,
     stack_risk_percent: float = STACK_RISK_PERCENT,
+    include: str = "both",
+    threads: list[str] | None = None,
+    heaps: list[str] | None = None,
 ) -> dict:
     workspace = context.workspace
+    sections = _sections(include, threads, heaps)
     name, build_dir = _build_dir(context, profile)
     warnings = _check(name, _enabled(build_dir))
     runner, runner_target = _probe(build_dir, runner, runner_target)
@@ -191,12 +214,24 @@ def runtime_stats(
         if exit_code is None:
             output += f"\nZView did not finish within {ZVIEW_TIMEOUT_S} s."
         raise _failure(output, workspace.relative(log))
+    result = {"profile": name, "runner": runner, "runner_target": runner_target}
+    found_threads, missing_threads = _select(frame.get("threads", []), threads)
+    found_heaps, missing_heaps = _select(frame.get("heaps", []), heaps)
+    if "threads" in sections:
+        result["threads"] = [_thread(row, stack_risk_percent) for row in found_threads]
+    if "heaps" in sections:
+        result["heaps"] = [_heap(row) for row in found_heaps]
+    not_found = missing_threads + missing_heaps
+    requested = (threads or []) + (heaps or [])
+    if requested and not_found == requested:
+        raise ZquireError(
+            "NOT_FOUND",
+            f"The board has no thread or heap named {', '.join(requested)}.",
+            "Call runtime_stats without names to list them.",
+        )
     return {
-        "profile": name,
-        "runner": runner,
-        "runner_target": runner_target,
-        "threads": [_thread(row, stack_risk_percent) for row in frame.get("threads", [])],
-        "heaps": [_heap(row) for row in frame.get("heaps", [])],
+        **result,
+        "not_found": not_found,
         "log_path": workspace.relative(log),
         "warnings": warnings,
     }

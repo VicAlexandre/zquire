@@ -359,3 +359,76 @@ def test_flash_fails_busy_while_a_dump_holds_the_board(root, monkeypatch):
         call(root, "flash")
     assert error.value.code == "BUSY"
     assert "in use by runtime_stats" in error.value.message
+
+
+@pytest.fixture
+def board(root):
+    threads = [zview_thread(name) for name in ("main", "sensor", "idle")]
+    zview_dump(root, threads, [zview_heap("app_heap"), zview_heap("net_heap")])
+    return root
+
+
+def names(rows):
+    return [row["name"] for row in rows]
+
+
+def test_both_sections_by_default(board):
+    result = call(board, "runtime_stats")
+    assert (names(result["threads"]), names(result["heaps"])) == (
+        ["main", "sensor", "idle"],
+        ["app_heap", "net_heap"],
+    )
+    assert result["not_found"] == []
+
+
+@pytest.mark.parametrize(
+    "include, sections",
+    [("threads", {"threads"}), ("heaps", {"heaps"}), ("both", {"threads", "heaps"})],
+)
+def test_include_one_section(board, include, sections):
+    result = call(board, "runtime_stats", include=include)
+    assert {"threads", "heaps"} & set(result) == sections
+
+
+def test_threads_by_name_in_the_boards_order(board):
+    result = call(board, "runtime_stats", threads=["idle", "main"])
+    assert (names(result["threads"]), result["not_found"]) == (["main", "idle"], [])
+    assert names(result["heaps"]) == ["app_heap", "net_heap"]
+
+
+def test_heaps_by_name(board):
+    result = call(board, "runtime_stats", heaps=["net_heap"])
+    assert (names(result["heaps"]), len(result["threads"])) == (["net_heap"], 3)
+
+
+def test_names_not_found_beside_those_found(board):
+    result = call(board, "runtime_stats", threads=["sensor", "radio"], heaps=["no_heap"])
+    assert (names(result["threads"]), result["heaps"]) == (["sensor"], [])
+    assert result["not_found"] == ["radio", "no_heap"]
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [{"threads": ["radio"]}, {"heaps": ["no_heap"]}, {"threads": ["radio"], "heaps": ["x"]}],
+)
+def test_no_name_found(board, arguments):
+    error = fails(board, **arguments)
+    requested = ", ".join(arguments.get("threads", []) + arguments.get("heaps", []))
+    assert error.code == "NOT_FOUND"
+    assert error.message == f"The board has no thread or heap named {requested}."
+    assert error.hint == "Call runtime_stats without names to list them."
+
+
+@pytest.mark.parametrize(
+    "arguments", [{"include": "heaps", "threads": ["main"]}, {"include": "threads", "heaps": ["x"]}]
+)
+def test_filter_for_a_section_left_out(board, arguments):
+    assert fails(board, **arguments).code == "INVALID_ARGUMENT"
+    assert zview_calls(board) == []
+
+
+@pytest.mark.parametrize(
+    "arguments", [{"include": "all"}, {"threads": []}, {"heaps": []}, {"threads": "main"}]
+)
+def test_invalid_filters(board, arguments):
+    assert fails(board, **arguments).code == "INVALID_ARGUMENT"

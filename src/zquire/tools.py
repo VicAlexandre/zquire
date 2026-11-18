@@ -201,8 +201,9 @@ def _input(properties: dict, required: list[str]) -> dict:
     }
 
 
-def _output(properties: dict) -> dict:
-    return {"type": "object", "properties": properties, "required": list(properties)}
+def _output(properties: dict, optional: tuple[str, ...] = ()) -> dict:
+    required = [name for name in properties if name not in optional]
+    return {"type": "object", "properties": properties, "required": required}
 
 
 _WARNINGS = {
@@ -605,6 +606,20 @@ TOOLS = {
                         "maximum": 100,
                         "description": f"Default {STACK_RISK_PERCENT}.",
                     },
+                    "include": {
+                        "enum": ["threads", "heaps", "both"],
+                        "description": "The sections to return. Default both.",
+                    },
+                    "threads": {
+                        **_STRINGS,
+                        "minItems": 1,
+                        "description": "Return only the threads with these names.",
+                    },
+                    "heaps": {
+                        **_STRINGS,
+                        "minItems": 1,
+                        "description": "Return only the heaps with these names.",
+                    },
                 },
                 [],
             ),
@@ -671,9 +686,14 @@ TOOLS = {
                             "required": ["name", "size", "used", "free", "max_used"],
                         },
                     },
+                    "not_found": {
+                        **_STRINGS,
+                        "description": "Requested thread and heap names the board has none of.",
+                    },
                     "log_path": {"type": "string"},
                     "warnings": _WARNINGS,
-                }
+                },
+                optional=("threads", "heaps"),
             ),
             handler=runtime_stats,
         ),
