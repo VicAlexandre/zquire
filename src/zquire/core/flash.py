@@ -4,7 +4,7 @@ from pathlib import Path
 
 from zquire.adapters.store import prepare_state_dir
 from zquire.adapters.west import run_west
-from zquire.core import profiles, serial, staleness
+from zquire.core import board_lock, profiles, serial, staleness
 from zquire.core.context import Context
 from zquire.errors import ZquireError
 
@@ -93,14 +93,15 @@ def flash(
     arguments = ["-v", "flash", "--no-rebuild", "-d", str(build_dir)]
     if runner is not None:
         arguments += ["-r", runner]
-    started = time.monotonic()
-    # The flash tool needs the port, and a USB console vanishes while the board resets.
-    released = serial.release(workspace)
-    try:
-        exit_code = run_west(workspace.root, arguments, log)
-    finally:
-        reopened = not released or serial.resume(workspace)
-    duration = round(time.monotonic() - started, 3)
+    with board_lock.hold(workspace, "flash"):
+        started = time.monotonic()
+        # The flash tool needs the port, and a USB console vanishes while the board resets.
+        released = serial.release(workspace)
+        try:
+            exit_code = run_west(workspace.root, arguments, log)
+        finally:
+            reopened = not released or serial.resume(workspace)
+        duration = round(time.monotonic() - started, 3)
     if not reopened:
         warnings.append(
             {

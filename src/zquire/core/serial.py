@@ -1,16 +1,15 @@
-import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 import zquire
 from zquire.adapters import ipc, serial_port
 from zquire.adapters.store import prepare_state_dir
+from zquire.core import board_lock
 from zquire.core.context import Context
 from zquire.core.serial_buffer import DEFAULT_CAPACITY
 from zquire.core.workspace import Workspace
@@ -26,9 +25,7 @@ _CLOSE_TIMEOUT_S = 5
 
 
 def socket_path(workspace: Workspace) -> Path:
-    # In the temporary directory, as Unix socket paths are limited to about 100 bytes.
-    digest = hashlib.sha256(str(workspace.root).encode()).hexdigest()[:16]
-    return Path(tempfile.gettempdir()) / f"zquire-{digest}.sock"
+    return workspace.runtime_path(".sock")
 
 
 def _no_capture() -> ZquireError:
@@ -143,7 +140,13 @@ def serial_open(
     baud: int | None = None,
     buffer_lines: int | None = None,
 ) -> dict:
-    workspace = context.workspace
+    with board_lock.hold(context.workspace, "serial_open"):
+        return _open(context.workspace, port, baud, buffer_lines)
+
+
+def _open(
+    workspace: Workspace, port: str | None, baud: int | None, buffer_lines: int | None
+) -> dict:
     reply = _reply(workspace, {"op": "info"})
     if reply is not None:
         info = reply["result"]
@@ -215,7 +218,11 @@ def serial_write(context: Context, text: str, line_ending: str = "\r\n") -> dict
 
 
 def serial_close(context: Context) -> dict:
-    workspace = context.workspace
+    with board_lock.hold(context.workspace, "serial_close"):
+        return _close(context.workspace)
+
+
+def _close(workspace: Workspace) -> dict:
     if _reply(workspace, {"op": "close"}) is None:
         return {"closed": False}
     # The process removes its socket last, once the port is released for the next capture.
