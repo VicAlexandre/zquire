@@ -2,12 +2,13 @@ import json
 import os
 import shutil
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 from zquire.adapters import serial_port
 from zquire.adapters.store import prepare_state_dir
 from zquire.adapters.west import run_west
-from zquire.core import profiles, serial
+from zquire.core import board_lock, profiles, serial
 from zquire.core.context import Context
 from zquire.core.diagnostics import diagnostics
 from zquire.core.workspace import Workspace
@@ -121,32 +122,35 @@ def twister(
     chosen = _platform(workspace, platform)
     state = prepare_state_dir(workspace.root)
     outdir = state / "twister"
-    # Twister would keep the last run beside this one as twister.1, twister.2 and so on.
-    shutil.rmtree(outdir, ignore_errors=True)
     log = state / "logs" / "twister.log"
     arguments = ["twister", "-p", chosen, "-O", str(outdir)]
     for path in paths:
         arguments += ["-T", str(workspace.resolve(path))]
     for scenario in scenarios:
         arguments += ["-s", scenario]
-    released = False
-    if device_testing:
-        captured = serial.capture_port(workspace)
-        if device_serial is None:
-            device_serial = captured or serial.pick_port(serial_port.usb_ports())
-        arguments += ["--device-testing", "--device-serial", device_serial]
-        # Twister opens the board's console itself, and the capture holds it exclusively.
-        released = (
-            captured is not None
-            and os.path.realpath(captured) == os.path.realpath(device_serial)
-            and serial.release(workspace)
-        )
-    started = time.monotonic()
-    try:
-        exit_code = run_west(workspace.root, arguments, log, timeout_s)
-    finally:
-        reopened = not released or serial.resume(workspace)
-    duration = round(time.monotonic() - started, 3)
+    # Only device testing uses the board. Emulated platforms run alongside its users.
+    lock = board_lock.hold(workspace, "twister") if device_testing else nullcontext()
+    with lock:
+        # Twister would keep the last run beside this one as twister.1, twister.2 and so on.
+        shutil.rmtree(outdir, ignore_errors=True)
+        released = False
+        if device_testing:
+            captured = serial.capture_port(workspace)
+            if device_serial is None:
+                device_serial = captured or serial.pick_port(serial_port.usb_ports())
+            arguments += ["--device-testing", "--device-serial", device_serial]
+            # Twister opens the board's console itself, and the capture holds it exclusively.
+            released = (
+                captured is not None
+                and os.path.realpath(captured) == os.path.realpath(device_serial)
+                and serial.release(workspace)
+            )
+        started = time.monotonic()
+        try:
+            exit_code = run_west(workspace.root, arguments, log, timeout_s)
+        finally:
+            reopened = not released or serial.resume(workspace)
+        duration = round(time.monotonic() - started, 3)
     report_path = outdir / "twister.json"
     report = _read_report(report_path)
     result = {

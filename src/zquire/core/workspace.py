@@ -1,3 +1,5 @@
+import hashlib
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,6 +17,12 @@ class Workspace:
     def resolve(self, path: str) -> Path:
         """Resolve a stored path, which is relative to the root unless absolute."""
         return (self.root / path).resolve()
+
+    def runtime_path(self, suffix: str) -> Path:
+        """A file in the temporary directory that belongs to this workspace."""
+        # Short, as Unix socket paths are limited to about 100 bytes.
+        digest = hashlib.sha256(str(self.root).encode()).hexdigest()[:16]
+        return Path(tempfile.gettempdir()) / f"zquire-{digest}{suffix}"
 
 
 def locate(start: Path, explicit: Path | None = None) -> Workspace | None:
